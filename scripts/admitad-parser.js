@@ -7,47 +7,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const ADMITAD_API = 'https://api.admitad.com';
-const AUTH_HEADER = process.env.ADMITAD_AUTH_HEADER;
+const RAW_AUTH_HEADER = process.env.ADMITAD_AUTH_HEADER;
 const CLIENT_ID = process.env.ADMITAD_CLIENT_ID;
 const CLIENT_SECRET = process.env.ADMITAD_CLIENT_SECRET;
 const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID;
 
 const CATEGORIES = {
-  autoparts: {
-    name: 'Автозапчасти',
-    keywords: ['запчасти', 'автозапчасти', 'parts', 'autoparts', 'exist', 'autodoc'],
-    icon: '🔧'
-  },
-  autoinsurance: {
-    name: 'Автострахование',
-    keywords: ['страхование', 'осаго', 'каско', 'insurance', 'сберстрахование', 'тинькофф страхование'],
-    icon: '📋'
-  },
-  autotires: {
-    name: 'Автошины',
-    keywords: ['шины', 'диски', 'tires', 'tyres', 'колеса', 'шиномонтаж'],
-    icon: '🛞'
-  },
-  autocheck: {
-    name: 'Проверка АВТО',
-    keywords: ['проверка', 'автокод', 'история', 'vin', 'carfax', 'автотека'],
-    icon: '🔍'
-  },
-  autorent: {
-    name: 'Прокат АВТО',
-    keywords: ['аренда', 'прокат', 'rent', 'rental', 'каршеринг'],
-    icon: '🚗'
-  },
-  tools: {
-    name: 'Инструменты',
-    keywords: ['инструменты', 'tools', 'всеинструменты', '220 вольт'],
-    icon: '🧰'
-  },
-  coupons: {
-    name: 'КУПОНЫ',
-    keywords: ['купон', 'скидка', 'coupon', 'promo', 'промокод'],
-    icon: '🎫'
-  }
+  autoparts: { name: 'Автозапчасти', keywords: ['запчасти', 'автозапчасти', 'parts', 'autoparts', 'exist', 'autodoc'], icon: '🔧' },
+  autoinsurance: { name: 'Автострахование', keywords: ['страхование', 'осаго', 'каско', 'insurance', 'сберстрахование', 'тинькофф страхование'], icon: '📋' },
+  autotires: { name: 'Автошины', keywords: ['шины', 'диски', 'tires', 'tyres', 'колеса', 'шиномонтаж'], icon: '🛞' },
+  autocheck: { name: 'Проверка АВТО', keywords: ['проверка', 'автокод', 'история', 'vin', 'carfax', 'автотека'], icon: '🔍' },
+  autorent: { name: 'Прокат АВТО', keywords: ['аренда', 'прокат', 'rent', 'rental', 'каршеринг'], icon: '🚗' },
+  tools: { name: 'Инструменты', keywords: ['инструменты', 'tools', 'всеинструменты', '220 вольт'], icon: '🧰' },
+  coupons: { name: 'КУПОНЫ', keywords: ['купон', 'скидка', 'coupon', 'promo', 'промокод'], icon: '🎫' }
 };
 
 const HORIZONTAL_ADS_PRIORITY = [
@@ -61,22 +33,46 @@ class AdmitadParser {
     this.programs = [];
   }
 
+  /**
+   * Очищает и нормализует заголовок авторизации.
+   * Удаляет пробелы, переносы строк, префиксы "Basic " и "Authorization: ".
+   */
+  sanitizeAuthHeader(header) {
+    if (!header) return null;
+    let cleaned = header.trim();
+    // Удаляем префиксы, если пользователь скопировал их вместе с заголовком
+    cleaned = cleaned.replace(/^Authorization:\s*/i, '').trim();
+    cleaned = cleaned.replace(/^Basic\s+/i, '').trim();
+    // Удаляем любые внутренние пробелы и переносы
+    cleaned = cleaned.replace(/\s+/g, '');
+    return cleaned;
+  }
+
   getAuthHeader() {
-    if (AUTH_HEADER) {
-      return AUTH_HEADER.trim();
+    // Приоритет: готовый заголовок из Admitad
+    if (RAW_AUTH_HEADER) {
+      const cleaned = this.sanitizeAuthHeader(RAW_AUTH_HEADER);
+      if (cleaned) {
+        console.log('🔐 Используем ADMITAD_AUTH_HEADER');
+        return cleaned;
+      }
     }
+
+    // Фолбэк: вычисляем из client_id и client_secret
     if (CLIENT_ID && CLIENT_SECRET) {
-      return Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
+      const id = CLIENT_ID.trim();
+      const secret = CLIENT_SECRET.trim();
+      if (id && secret) {
+        console.log('🔐 Вычисляем заголовок из CLIENT_ID и CLIENT_SECRET');
+        return Buffer.from(`${id}:${secret}`).toString('base64');
+      }
     }
+
     throw new Error('Missing auth credentials! Set ADMITAD_AUTH_HEADER or ADMITAD_CLIENT_ID + ADMITAD_CLIENT_SECRET.');
   }
 
   async getToken() {
     console.log('🔑 Получение access token...');
-
-    if (!WEBSITE_ID) {
-      throw new Error('ADMITAD_WEBSITE_ID is not set! Check GitHub Secrets.');
-    }
 
     const authHeader = this.getAuthHeader();
 
@@ -112,6 +108,10 @@ class AdmitadParser {
   }
 
   async fetchPrograms() {
+    if (!WEBSITE_ID) {
+      throw new Error('ADMITAD_WEBSITE_ID is not set! Required for fetching programs.');
+    }
+
     console.log('📥 Загрузка партнерских программ...');
 
     let offset = 0;
@@ -168,7 +168,6 @@ class AdmitadParser {
 
   categorizeProgram(program) {
     const text = `${program.name} ${program.description || ''} ${program.site_url || ''}`.toLowerCase();
-
     for (const [key, category] of Object.entries(CATEGORIES)) {
       for (const keyword of category.keywords) {
         if (text.includes(keyword.toLowerCase())) {
@@ -176,22 +175,17 @@ class AdmitadParser {
         }
       }
     }
-
-    if (program.traffics?.some(t => t.name?.toLowerCase().includes('coupon')) ||
-        program.coupons) {
+    if (program.traffics?.some(t => t.name?.toLowerCase().includes('coupon')) || program.coupons) {
       return 'coupons';
     }
-
     return null;
   }
 
   parseLegalInfo(legalInfo) {
     if (!legalInfo) return null;
-
     try {
       const nameMatch = legalInfo.match(/\{([^}]+)\}/);
       const innMatch = legalInfo.match(/ИНН:\s*\{([^}]+)\}/);
-
       return {
         name: nameMatch ? nameMatch[1].trim() : null,
         inn: innMatch ? innMatch[1].trim() : null,
@@ -206,15 +200,10 @@ class AdmitadParser {
     const regions = program.regions?.map(r => r.region) || [];
     const actionCountries = program.action_countries || [];
     const allRegions = [...regions, ...actionCountries];
-
-    const hasRU = allRegions.includes('RU');
-    const hasCIS = ['BY', 'KZ', 'UZ', 'KG', 'TJ', 'AM', 'AZ', 'MD'].some(c => allRegions.includes(c));
-    const hasGlobal = ['US', 'DE', 'FR', 'GB', 'IT', 'ES'].some(c => allRegions.includes(c));
-
     return {
-      ru: hasRU,
-      cis: hasCIS,
-      global: hasGlobal,
+      ru: allRegions.includes('RU'),
+      cis: ['BY', 'KZ', 'UZ', 'KG', 'TJ', 'AM', 'AZ', 'MD'].some(c => allRegions.includes(c)),
+      global: ['US', 'DE', 'FR', 'GB', 'IT', 'ES'].some(c => allRegions.includes(c)),
       all: allRegions
     };
   }
@@ -231,27 +220,17 @@ class AdmitadParser {
 
   processPrograms() {
     console.log('🔄 Обработка программ...');
-
     const categorized = {
-      autoparts: [],
-      autoinsurance: [],
-      autotires: [],
-      autocheck: [],
-      autorent: [],
-      tools: [],
-      coupons: []
+      autoparts: [], autoinsurance: [], autotires: [], autocheck: [],
+      autorent: [], tools: [], coupons: []
     };
-
     const horizontalAds = [];
 
     for (const program of this.programs) {
-      if (program.status !== 'active' || program.connection_status !== 'active') {
-        continue;
-      }
+      if (program.status !== 'active' || program.connection_status !== 'active') continue;
 
       const category = this.categorizeProgram(program);
-
-      const processedProgram = {
+      const processed = {
         id: program.id,
         name: program.name,
         description: program.description?.replace(/<[^>]*>/g, '').substring(0, 200) || '',
@@ -267,23 +246,14 @@ class AdmitadParser {
         currency: program.currency || 'RUB',
         legal_info: this.parseLegalInfo(program.advertiser_legal_info),
         regions: this.determineRegion(program),
-        actions: program.actions?.map(a => ({
-          id: a.id,
-          name: a.name,
-          type: a.type,
-          payment_size: a.payment_size
-        })) || [],
+        actions: program.actions?.map(a => ({ id: a.id, name: a.name, type: a.type, payment_size: a.payment_size })) || [],
         category: category,
         priority: this.calculatePriority(program)
       };
 
-      if (category) {
-        categorized[category].push(processedProgram);
-      }
-
-      const nameLower = program.name.toLowerCase();
-      if (HORIZONTAL_ADS_PRIORITY.some(p => nameLower.includes(p))) {
-        horizontalAds.push(processedProgram);
+      if (category) categorized[category].push(processed);
+      if (HORIZONTAL_ADS_PRIORITY.some(p => program.name.toLowerCase().includes(p))) {
+        horizontalAds.push(processed);
       }
     }
 
@@ -293,7 +263,6 @@ class AdmitadParser {
     horizontalAds.sort((a, b) => b.priority - a.priority);
 
     console.log('✅ Обработка завершена');
-
     return {
       categories: categorized,
       horizontal_ads: horizontalAds.slice(0, 20),
@@ -309,9 +278,7 @@ class AdmitadParser {
   async saveToFile(data) {
     const outputPath = path.join(__dirname, '..', 'public', 'admitad-data.json');
     const dir = path.dirname(outputPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(outputPath, JSON.stringify(data, null, 2), 'utf8');
     console.log(`💾 Данные сохранены в ${outputPath}`);
     console.log(`📊 Статистика: ${JSON.stringify(data.stats, null, 2)}`);
