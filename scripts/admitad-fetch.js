@@ -32,27 +32,6 @@ try {
   process.exit(1);
 }
 
-// Категории ключевых слов для фильтрации
-const CATEGORY_KEYWORDS = {
-  autoparts: ['автозапчасти', 'запчасти', 'auto parts', 'автодетали'],
-  autoinsurance: ['страхование', 'осаго', 'каско', 'insurance', 'автострахование'],
-  tires: ['шины', 'покрышки', 'tires', 'автошины', 'резина'],
-  checkauto: ['проверка авто', 'автокод', 'vin', 'car check', 'история авто'],
-  autorent: ['прокат авто', 'аренда авто', 'car rental', 'rent a car'],
-  tools: ['инструменты', 'tools', 'автоинструмент'],
-  coupons: ['купон', 'coupon', 'промокод'],
-};
-
-function detectCategory(program) {
-  const text = `${program.name} ${program.description || ''}`.toLowerCase();
-  for (const [catId, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-    if (keywords.some(kw => text.includes(kw.toLowerCase()))) {
-      return catId;
-    }
-  }
-  return null;
-}
-
 async function fetchAccessToken() {
   const params = new URLSearchParams();
   params.append('grant_type', 'client_credentials');
@@ -167,12 +146,9 @@ async function main() {
     // Кэш для данных рекламодателей, чтобы не делать повторные запросы
     const advertiserCache = new Map();
 
-    // Обогащаем программы купонами и фильтруем
+    // Обогащаем программы (без фильтрации по категориям)
     const enrichedPrograms = [];
     for (const prog of allPrograms) {
-      const category = detectCategory(prog);
-      if (!category) continue;
-
       // Получаем юридическую информацию
       let legalInfo = prog.advertiser_legal_info || {
         name: prog.advertiser_name || prog.name,
@@ -212,14 +188,13 @@ async function main() {
         image: prog.image || '',
         goto_link: prog.goto_link || prog.site_url,
         site_url: prog.site_url,
-        category: category,
         advertiser_legal_info: {
           name: legalInfo.name || prog.name,
           inn: legalInfo.inn || '',
         },
         commission: prog.commission || null,
         products_count: prog.products_count || 0,
-        allowed_regions: allowedRegions, // <-- Новое поле
+        allowed_regions: allowedRegions,
         coupons: programCoupons.map(c => ({
           id: c.id,
           name: c.name,
@@ -233,7 +208,7 @@ async function main() {
       });
     }
 
-    console.log(`✅ Отфильтровано программ: ${enrichedPrograms.length}`);
+    console.log(`✅ Обработано программ: ${enrichedPrograms.length}`);
 
     const outputData = {
       last_updated: new Date().toISOString(),
