@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const BASE64_HEADER = process.env.BASE64_HEADER;
-const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID; // новый параметр
+const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID;
 const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns';
 
 if (!BASE64_HEADER) {
@@ -90,7 +90,7 @@ async function main() {
     console.log('✅ Токен получен');
 
     // Строим URL с параметром website, если он задан
-    let apiUrl = `https://api.admitad.com/advcampaigns/?limit=200`; // увеличим лимит
+    let apiUrl = `https://api.admitad.com/advcampaigns/?limit=200`; // увеличен лимит
     if (WEBSITE_ID) {
       apiUrl += `&website=${WEBSITE_ID}`;
       console.log(`📡 Загрузка программ для площадки ${WEBSITE_ID}...`);
