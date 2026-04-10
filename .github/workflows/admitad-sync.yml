@@ -1,54 +1,72 @@
 name: Admitad Data Sync
 
 on:
-  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'  # Запуск каждые 6 часов
+  workflow_dispatch:       # Ручной запуск
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   sync-admitad:
     runs-on: ubuntu-latest
+    # ⛔ ВАЖНО: Строки environment: быть НЕ ДОЛЖНО!
+    # Иначе GitHub игнорирует Repository secrets.
+
     permissions:
       contents: write
-    
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-        
-      - name: Setup Node
+
+      - name: Setup Node.js 24
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: 'npm'
 
-      # 🔍 Проверка секретов
+      # 🔍 Проверка секретов перед запуском
       - name: 🔍 Проверка секретов
         run: |
-          echo "Проверяю наличие секретов..."
+          echo "Проверяю наличие секретов в Repository Secrets..."
           
           if [ -z "${{ secrets.ADMITAD_AUTH_HEADER }}" ]; then
-            echo "❌ ОШИБКА: ADMITAD_AUTH_HEADER пустой!"
-            echo "Создай секрет ADMITAD_AUTH_HEADER в Repository secrets."
+            echo "❌ ОШИБКА: ADMITAD_AUTH_HEADER не найден!"
+            echo "Создайте секрет ADMITAD_AUTH_HEADER в Settings → Secrets and variables → Actions → Repository secrets."
             exit 1
           fi
           
           if [ -z "${{ secrets.ADMITAD_CLIENT_ID }}" ]; then
-            echo "❌ ОШИБКА: ADMITAD_CLIENT_ID пустой!"
+            echo "❌ ОШИБКА: ADMITAD_CLIENT_ID не найден!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ADMITAD_CLIENT_SECRET }}" ]; then
+            echo "❌ ОШИБКА: ADMITAD_CLIENT_SECRET не найден!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ADMITAD_WEBSITE_ID }}" ]; then
+            echo "❌ ОШИБКА: ADMITAD_WEBSITE_ID не найден!"
             exit 1
           fi
           
           echo "✅ Все секреты присутствуют!"
 
-      - name: Install
+      - name: Install dependencies
         run: npm ci
-        
-      - name: Run Parser
+
+      - name: Run Admitad Parser
         env:
           ADMITAD_AUTH_HEADER: ${{ secrets.ADMITAD_AUTH_HEADER }}
           ADMITAD_CLIENT_ID: ${{ secrets.ADMITAD_CLIENT_ID }}
           ADMITAD_CLIENT_SECRET: ${{ secrets.ADMITAD_CLIENT_SECRET }}
           ADMITAD_WEBSITE_ID: ${{ secrets.ADMITAD_WEBSITE_ID }}
         run: node scripts/admitad-parser.js
-        
-      - name: Commit
+
+      - name: Commit and push changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
