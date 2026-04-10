@@ -159,7 +159,7 @@ class AdmitadParser {
 
     try {
       const nameMatch = legalInfo.match(/\{([^}]+)\}/);
-      const innMatch = legalInfo.match(/ИНН:\s*\{([^}]+)\}/);
+      const innMatch = legalInfo.match(/ИНН:\s*{([^}]+)}/);
 
       return {
         name: nameMatch ? nameMatch[1].trim() : null,
