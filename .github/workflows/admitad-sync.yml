@@ -1,43 +1,57 @@
-name: Admitad Curl Fixed
+name: Admitad Data Sync
 
 on:
   workflow_dispatch:
 
 jobs:
-  test:
+  sync-admitad:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
     steps:
-      - name: 🔥 Тест токена через curl (FIXED)
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      # 🔍 Проверка секретов
+      - name: 🔍 Проверка секретов
         run: |
-          set -x
+          echo "Проверяю наличие секретов..."
           
-          echo "Формирование заголовка с base64 -w 0..."
-          # -w 0 отключает переносы строк!
-          AUTH_HEADER=$(echo -n "${{ secrets.ADMITAD_CLIENT_ID }}:${{ secrets.ADMITAD_CLIENT_SECRET }}" | base64 -w 0)
-          
-          echo "Длина заголовка: ${#AUTH_HEADER}"
-          
-          echo "Отправка запроса..."
-          RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST https://api.admitad.com/token/ \
-            -H "Authorization: Basic $AUTH_HEADER" \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "grant_type=client_credentials&scope=advcampaigns advcampaigns_for_website public_data")
-          
-          CURL_EXIT=$?
-          echo "Curl exit code: $CURL_EXIT"
-          
-          echo "Ответ от Admitad:"
-          echo "$RESPONSE"
-          
-          if [ $CURL_EXIT -ne 0 ]; then
-            echo "❌ Curl упал с кодом $CURL_EXIT"
+          if [ -z "${{ secrets.ADMITAD_AUTH_HEADER }}" ]; then
+            echo "❌ ОШИБКА: ADMITAD_AUTH_HEADER пустой!"
+            echo "Создай секрет ADMITAD_AUTH_HEADER в Repository secrets."
             exit 1
           fi
           
-          if echo "$RESPONSE" | grep -q '"access_token"'; then
-            echo "✅ ТОКЕН ПОЛУЧЕН! Секреты работают."
-            echo "Проблема была в base64 без -w 0 или в парсере."
-          else
-            echo "❌ Токен не получен. Проверь ответ выше."
+          if [ -z "${{ secrets.ADMITAD_CLIENT_ID }}" ]; then
+            echo "❌ ОШИБКА: ADMITAD_CLIENT_ID пустой!"
             exit 1
           fi
+          
+          echo "✅ Все секреты присутствуют!"
+
+      - name: Install
+        run: npm ci
+        
+      - name: Run Parser
+        env:
+          ADMITAD_AUTH_HEADER: ${{ secrets.ADMITAD_AUTH_HEADER }}
+          ADMITAD_CLIENT_ID: ${{ secrets.ADMITAD_CLIENT_ID }}
+          ADMITAD_CLIENT_SECRET: ${{ secrets.ADMITAD_CLIENT_SECRET }}
+          ADMITAD_WEBSITE_ID: ${{ secrets.ADMITAD_WEBSITE_ID }}
+        run: node scripts/admitad-parser.js
+        
+      - name: Commit
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add public/admitad-data.json
+          git diff --staged --quiet || git commit -m "🔄 Update Admitad data [skip ci]"
+          git push
