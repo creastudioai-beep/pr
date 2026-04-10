@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const BASE64_HEADER = process.env.BASE64_HEADER;
+const SCOPE = process.env.ADMITAD_SCOPE || 'public_data'; // <-- новый параметр
 
 if (!BASE64_HEADER) {
   console.error('❌ Отсутствует BASE64_HEADER в переменных окружения');
@@ -55,8 +56,9 @@ async function fetchAccessToken() {
   params.append('grant_type', 'client_credentials');
   params.append('client_id', clientId);
   params.append('client_secret', clientSecret);
+  params.append('scope', SCOPE); // <-- добавлен scope
 
-  console.log('🔐 Получение токена (client_id и client_secret в теле запроса)...');
+  console.log(`🔐 Получение токена (scope: ${SCOPE})...`);
   const response = await fetch('https://api.admitad.com/token/', {
     method: 'POST',
     headers: {
