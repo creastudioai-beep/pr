@@ -32,6 +32,32 @@ try {
   process.exit(1);
 }
 
+// Вспомогательная функция для создания «слага» из названия
+function slugify(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+// Категории ключевых слов для автоматического определения тематики
+const CATEGORY_KEYWORDS = {
+  autoparts: ['автозапчасти', 'запчасти', 'auto parts', 'автодетали'],
+  autoinsurance: ['страхование', 'осаго', 'каско', 'insurance', 'автострахование'],
+  tires: ['шины', 'покрышки', 'tires', 'автошины', 'резина'],
+  checkauto: ['проверка авто', 'автокод', 'vin', 'car check', 'история авто'],
+  autorent: ['прокат авто', 'аренда авто', 'car rental', 'rent a car'],
+  tools: ['инструменты', 'tools', 'автоинструмент'],
+  coupons: ['купон', 'coupon', 'промокод'],
+};
+
+function detectCategory(program) {
+  const text = `${program.name} ${program.description || ''}`.toLowerCase();
+  for (const [catId, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (keywords.some(kw => text.includes(kw.toLowerCase()))) {
+      return catId;
+    }
+  }
+  return 'other';
+}
+
 async function fetchAccessToken() {
   const params = new URLSearchParams();
   params.append('grant_type', 'client_credentials');
@@ -62,9 +88,6 @@ async function fetchAccessToken() {
 
 /**
  * Получение подробной информации о рекламодателе
- * @param {number} advertiserId - ID рекламодателя
- * @param {string} accessToken
- * @returns {Promise<{name: string, inn: string}>}
  */
 async function fetchAdvertiserInfo(advertiserId, accessToken) {
   try {
@@ -79,7 +102,6 @@ async function fetchAdvertiserInfo(advertiserId, accessToken) {
       return null;
     }
     const data = await response.json();
-    // Поля могут называться по-разному, пробуем разные варианты
     const name = data.name || data.company_name || data.advertiser_name || '';
     const inn = data.inn || data.tax_id || data.vat_id || '';
     return { name, inn };
@@ -94,7 +116,7 @@ async function main() {
     const accessToken = await fetchAccessToken();
     console.log('✅ Токен получен');
 
-    // Строим URL для программ
+    // --- 1. Получаем ВСЕ подключенные программы ---
     let campaignsUrl = `https://api.admitad.com/advcampaigns/?limit=200`;
     if (WEBSITE_ID) {
       campaignsUrl += `&website=${WEBSITE_ID}`;
@@ -119,7 +141,7 @@ async function main() {
     const allPrograms = campaignsData.results || [];
     console.log(`📊 Получено программ: ${allPrograms.length}`);
 
-    // Загрузка купонов
+    // --- 2. Загружаем купоны ---
     console.log('🎫 Загрузка купонов...');
     let allCoupons = [];
     try {
@@ -143,11 +165,13 @@ async function main() {
       console.warn(`⚠️ Ошибка при загрузке купонов: ${couponError.message}`);
     }
 
-    // Кэш для данных рекламодателей, чтобы не делать повторные запросы
+    // Кэш для данных рекламодателей
     const advertiserCache = new Map();
 
-    // Обогащаем программы (без фильтрации по категориям)
-    const enrichedPrograms = [];
+    // Временное хранилище для программ
+    const processedPrograms = [];
+
+    // --- 3. Обработка каждой программы ---
     for (const prog of allPrograms) {
       // Получаем юридическую информацию
       let legalInfo = prog.advertiser_legal_info || {
@@ -155,7 +179,6 @@ async function main() {
         inn: prog.advertiser_inn || '',
       };
 
-      // Если ИНН отсутствует и есть advertiser_id, пытаемся получить через отдельный запрос
       if ((!legalInfo.inn || legalInfo.inn.trim() === '') && prog.advertiser_id) {
         const advertiserId = prog.advertiser_id;
         if (!advertiserCache.has(advertiserId)) {
@@ -178,16 +201,22 @@ async function main() {
         allowedRegions = prog.regions.map(r => r.region || r).filter(Boolean);
       }
 
-      // Ищем купоны, привязанные к данной программе
+      // Ищем купоны для этой программы
       const programCoupons = allCoupons.filter(c => c.campaign && c.campaign.id === prog.id);
 
-      enrichedPrograms.push({
+      // Определяем категорию
+      const category = detectCategory(prog);
+
+      // Создаём объект программы
+      processedPrograms.push({
         id: prog.id,
         name: prog.name,
+        slug: slugify(prog.name),
         description: prog.description || '',
         image: prog.image || '',
         goto_link: prog.goto_link || prog.site_url,
         site_url: prog.site_url,
+        category: category,
         advertiser_legal_info: {
           name: legalInfo.name || prog.name,
           inn: legalInfo.inn || '',
@@ -208,15 +237,77 @@ async function main() {
       });
     }
 
-    console.log(`✅ Обработано программ: ${enrichedPrograms.length}`);
+    console.log(`✅ Обработано программ: ${processedPrograms.length}`);
 
+    // --- 4. ГРУППИРОВКА ПО РЕГИОНАМ для удобства Worker ---
+    // Стратегия: Россия, СНГ, Глобал (можно дополнить любыми другими)
+    const REGION_GROUPS = {
+      ru: { name: 'Россия', nameEn: 'Russia', countries: ['RU'] },
+      cis: { name: 'СНГ', nameEn: 'CIS', countries: ['BY', 'KZ', 'AM', 'KG', 'UZ', 'TJ'] },
+      global: { name: 'Глобал', nameEn: 'Global', countries: [] } // пустой массив означает "все остальные"
+    };
+
+    // Инициализируем структуру для сгруппированных данных
+    const regionGroups = {};
+    for (const key of Object.keys(REGION_GROUPS)) {
+      regionGroups[key] = {
+        id: key,
+        name: REGION_GROUPS[key].name,
+        nameEn: REGION_GROUPS[key].nameEn,
+        programs: []
+      };
+    }
+
+    // Распределяем программы по группам
+    for (const prog of processedPrograms) {
+      let assigned = false;
+      
+      for (const [groupKey, groupDef] of Object.entries(REGION_GROUPS)) {
+        // Пропускаем global на первом этапе
+        if (groupKey === 'global') continue;
+        
+        // Проверяем, есть ли пересечение стран программы с группой
+        const hasIntersection = prog.allowed_regions.some(r => groupDef.countries.includes(r));
+        if (hasIntersection) {
+          regionGroups[groupKey].programs.push(prog);
+          assigned = true;
+        }
+      }
+      
+      // Если программа не попала ни в одну региональную группу, она идёт в global
+      if (!assigned) {
+        regionGroups.global.programs.push(prog);
+      }
+    }
+
+    // Удаляем дубликаты из групп (на случай, если программа попала в несколько)
+    for (const key of Object.keys(regionGroups)) {
+      const uniquePrograms = Array.from(
+        new Map(regionGroups[key].programs.map(p => [p.id, p])).values()
+      );
+      regionGroups[key].programs = uniquePrograms;
+      regionGroups[key].count = uniquePrograms.length;
+    }
+
+    console.log(`📊 Группировка по регионам:`);
+    for (const [key, group] of Object.entries(regionGroups)) {
+      console.log(`   - ${group.name}: ${group.count} программ`);
+    }
+
+    // --- 5. ФИНАЛЬНЫЙ JSON ---
     const outputData = {
       last_updated: new Date().toISOString(),
       website_id: WEBSITE_ID || null,
-      total_programs: enrichedPrograms.length,
-      programs: enrichedPrograms,
+      total_programs: processedPrograms.length,
+      // Полный список всех программ (для обратной совместимости)
+      programs: processedPrograms,
+      // Сгруппированные данные для Worker
+      region_groups: regionGroups,
+      // Мета-информация о категориях
+      categories: CATEGORY_KEYWORDS
     };
 
+    // Создаём директорию и сохраняем файл
     const dataDir = path.join(__dirname, '..', 'data');
     try {
       await fs.access(dataDir);
