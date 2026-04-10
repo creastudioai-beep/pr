@@ -6,6 +6,10 @@ on:
     - cron: '0 */6 * * *'
   workflow_dispatch: # Ручной запуск
 
+# Принудительное использование Node.js 24 для всех JavaScript Actions
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   sync-admitad:
     runs-on: ubuntu-latest
@@ -16,13 +20,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         
-      - name: Setup Node.js
+      - name: Setup Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
+          cache: 'npm'
           
       - name: Install dependencies
-        run: npm install node-fetch
+        run: npm ci
         
       - name: Run Admitad Parser
         env:
