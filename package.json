@@ -1,5 +1,17 @@
 {
+  "name": "admitad-parser",
+  "version": "1.0.0",
+  "description": "Admitad partner programs parser for GitHub Actions",
+  "main": "scripts/admitad-parser.js",
   "type": "module",
-  "engines": { "node": ">=24.0.0" },
-  "dependencies": { "node-fetch": "^3.3.2" }
+  "scripts": {
+    "parse": "node scripts/admitad-parser.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "license": "MIT"
 }
