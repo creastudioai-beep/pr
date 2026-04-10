@@ -5,6 +5,10 @@ on:
     - cron: '0 * * * *'
   workflow_dispatch:
 
+# Добавляем разрешения для GITHUB_TOKEN
+permissions:
+  contents: write
+
 jobs:
   fetch-and-commit:
     runs-on: ubuntu-latest
