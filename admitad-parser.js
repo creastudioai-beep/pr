@@ -1,5 +1,10 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fetch from 'node-fetch';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const ADMITAD_API = 'https://api.admitad.com';
 const CLIENT_ID = process.env.ADMITAD_CLIENT_ID;
@@ -8,37 +13,37 @@ const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID;
 
 // Категории для распределения партнерок
 const CATEGORIES = {
-  'autoparts': {
+  autoparts: {
     name: 'Автозапчасти',
     keywords: ['запчасти', 'автозапчасти', 'parts', 'autoparts', 'exist', 'autodoc'],
     icon: '🔧'
   },
-  'autoinsurance': {
+  autoinsurance: {
     name: 'Автострахование',
     keywords: ['страхование', 'осаго', 'каско', 'insurance', 'сберстрахование', 'тинькофф страхование'],
     icon: '📋'
   },
-  'autotires': {
+  autotires: {
     name: 'Автошины',
     keywords: ['шины', 'диски', 'tires', 'tyres', 'колеса', 'шиномонтаж'],
     icon: '🛞'
   },
-  'autocheck': {
+  autocheck: {
     name: 'Проверка АВТО',
     keywords: ['проверка', 'автокод', 'история', 'vin', 'carfax', 'автотека'],
     icon: '🔍'
   },
-  'autorent': {
+  autorent: {
     name: 'Прокат АВТО',
     keywords: ['аренда', 'прокат', 'rent', 'rental', 'каршеринг'],
     icon: '🚗'
   },
-  'tools': {
+  tools: {
     name: 'Инструменты',
     keywords: ['инструменты', 'tools', 'всеинструменты', '220 вольт'],
     icon: '🧰'
   },
-  'coupons': {
+  coupons: {
     name: 'КУПОНЫ',
     keywords: ['купон', 'скидка', 'coupon', 'promo', 'промокод'],
     icon: '🎫'
@@ -47,7 +52,7 @@ const CATEGORIES = {
 
 // Приоритетные рекламодатели для горизонтальных блоков
 const HORIZONTAL_ADS_PRIORITY = [
-  'exist', 'autodoc', 'всеинструменты', 'сберстрахование', 
+  'exist', 'autodoc', 'всеинструменты', 'сберстрахование',
   'тинькофф', 'яндекс', 'ozon', 'wildberries', 'алиэкспресс'
 ];
 
@@ -59,9 +64,13 @@ class AdmitadParser {
 
   async getToken() {
     console.log('🔑 Получение access token...');
-    
+
+    if (!CLIENT_ID || !CLIENT_SECRET) {
+      throw new Error('Missing ADMITAD_CLIENT_ID or ADMITAD_CLIENT_SECRET');
+    }
+
     const auth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
-    
+
     const response = await fetch(`${ADMITAD_API}/token/`, {
       method: 'POST',
       headers: {
@@ -72,7 +81,8 @@ class AdmitadParser {
     });
 
     if (!response.ok) {
-      throw new Error(`Token error: ${response.status} ${await response.text()}`);
+      const errorText = await response.text();
+      throw new Error(`Token error: ${response.status} ${errorText}`);
     }
 
     const data = await response.json();
@@ -83,7 +93,7 @@ class AdmitadParser {
 
   async fetchPrograms() {
     console.log('📥 Загрузка партнерских программ...');
-    
+
     let offset = 0;
     const limit = 100;
     let allPrograms = [];
@@ -104,7 +114,7 @@ class AdmitadParser {
       }
 
       const data = await response.json();
-      
+
       if (!data.results || data.results.length === 0) {
         break;
       }
@@ -117,8 +127,6 @@ class AdmitadParser {
       }
 
       offset += limit;
-      
-      // Небольшая задержка чтобы не перегружать API
       await new Promise(r => setTimeout(r, 200));
     }
 
@@ -128,8 +136,8 @@ class AdmitadParser {
   }
 
   categorizeProgram(program) {
-    const text = `${program.name} ${program.description} ${program.site_url}`.toLowerCase();
-    
+    const text = `${program.name} ${program.description || ''} ${program.site_url || ''}`.toLowerCase();
+
     for (const [key, category] of Object.entries(CATEGORIES)) {
       for (const keyword of category.keywords) {
         if (text.includes(keyword.toLowerCase())) {
@@ -138,7 +146,6 @@ class AdmitadParser {
       }
     }
 
-    // Проверка на купоны
     if (program.traffics?.some(t => t.name?.toLowerCase().includes('coupon')) ||
         program.coupons) {
       return 'coupons';
@@ -149,12 +156,11 @@ class AdmitadParser {
 
   parseLegalInfo(legalInfo) {
     if (!legalInfo) return null;
-    
+
     try {
-      // Формат: {ООО "Ромашка"}, ИНН: {1112223334}
       const nameMatch = legalInfo.match(/\{([^}]+)\}/);
       const innMatch = legalInfo.match(/ИНН:\s*\{([^}]+)\}/);
-      
+
       return {
         name: nameMatch ? nameMatch[1].trim() : null,
         inn: innMatch ? innMatch[1].trim() : null,
@@ -182,9 +188,19 @@ class AdmitadParser {
     };
   }
 
+  calculatePriority(program) {
+    let priority = 0;
+    priority += (parseFloat(program.rating) || 0) * 10;
+    priority += (parseFloat(program.ecpc) || 0) * 2;
+    priority += (parseFloat(program.cr) || 0) * 0.5;
+    if (program.allow_deeplink) priority += 5;
+    if (program.connected) priority += 3;
+    return Math.round(priority * 100) / 100;
+  }
+
   processPrograms() {
     console.log('🔄 Обработка программ...');
-    
+
     const categorized = {
       autoparts: [],
       autoinsurance: [],
@@ -198,13 +214,12 @@ class AdmitadParser {
     const horizontalAds = [];
 
     for (const program of this.programs) {
-      // Пропускаем неактивные
       if (program.status !== 'active' || program.connection_status !== 'active') {
         continue;
       }
 
       const category = this.categorizeProgram(program);
-      
+
       const processedProgram = {
         id: program.id,
         name: program.name,
@@ -235,24 +250,22 @@ class AdmitadParser {
         categorized[category].push(processedProgram);
       }
 
-      // Проверка для горизонтальных блоков
       const nameLower = program.name.toLowerCase();
       if (HORIZONTAL_ADS_PRIORITY.some(p => nameLower.includes(p))) {
         horizontalAds.push(processedProgram);
       }
     }
 
-    // Сортировка по приоритету
     for (const key of Object.keys(categorized)) {
       categorized[key].sort((a, b) => b.priority - a.priority);
     }
     horizontalAds.sort((a, b) => b.priority - a.priority);
 
     console.log('✅ Обработка завершена');
-    
+
     return {
       categories: categorized,
-      horizontal_ads: horizontalAds.slice(0, 20), // Топ 20 для ротации
+      horizontal_ads: horizontalAds.slice(0, 20),
       stats: {
         total_programs: this.programs.length,
         active_programs: Object.values(categorized).reduce((sum, arr) => sum + arr.length, 0),
@@ -262,28 +275,12 @@ class AdmitadParser {
     };
   }
 
-  calculatePriority(program) {
-    let priority = 0;
-    
-    priority += (parseFloat(program.rating) || 0) * 10;
-    priority += (parseFloat(program.ecpc) || 0) * 2;
-    priority += (parseFloat(program.cr) || 0) * 0.5;
-    
-    if (program.allow_deeplink) priority += 5;
-    if (program.connected) priority += 3;
-    
-    return Math.round(priority * 100) / 100;
-  }
-
   async saveToFile(data) {
     const outputPath = path.join(__dirname, '..', 'public', 'admitad-data.json');
-    
-    // Убедимся что директория существует
     const dir = path.dirname(outputPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-
     fs.writeFileSync(outputPath, JSON.stringify(data, null, 2), 'utf8');
     console.log(`💾 Данные сохранены в ${outputPath}`);
     console.log(`📊 Статистика: ${JSON.stringify(data.stats, null, 2)}`);
@@ -303,6 +300,5 @@ class AdmitadParser {
   }
 }
 
-// Запуск
 const parser = new AdmitadParser();
 parser.run();
