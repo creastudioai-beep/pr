@@ -1,6 +1,10 @@
-// Используем встроенный fetch (доступен в Node.js 18+)
-const fs = require('fs');
-const path = require('path');
+// ES module syntax
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Конфигурация из переменных окружения
 const CLIENT_ID = process.env.ADMITAD_CLIENT_ID;
@@ -106,12 +110,14 @@ async function main() {
 
     // Убедимся, что папка data существует
     const dataDir = path.join(__dirname, '..', 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
+    try {
+      await fs.access(dataDir);
+    } catch {
+      await fs.mkdir(dataDir, { recursive: true });
     }
 
     const outputPath = path.join(dataDir, 'admitad_ads.json');
-    fs.writeFileSync(outputPath, JSON.stringify(outputData, null, 2));
+    await fs.writeFile(outputPath, JSON.stringify(outputData, null, 2));
 
     console.log(`💾 Файл сохранён: ${outputPath}`);
   } catch (error) {
