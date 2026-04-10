@@ -13,9 +13,21 @@ if (!BASE64_HEADER) {
   process.exit(1);
 }
 
-// Определяем, содержит ли секрет уже префикс "Basic"
-const authHeader = BASE64_HEADER.startsWith('Basic ') ? BASE64_HEADER : `Basic ${BASE64_HEADER}`;
-console.log('🔑 Используется Authorization заголовок (первые 20 символов):', authHeader.substring(0, 20) + '...');
+// Декодируем Base64, чтобы получить client_id:client_secret
+let clientId, clientSecret;
+try {
+  const decoded = Buffer.from(BASE64_HEADER, 'base64').toString('utf8');
+  const parts = decoded.split(':');
+  if (parts.length !== 2) {
+    throw new Error('Некорректный формат BASE64_HEADER: ожидается "client_id:client_secret"');
+  }
+  clientId = parts[0];
+  clientSecret = parts[1];
+  console.log(`🔑 Извлечён Client ID (первые 4 символа): ${clientId.substring(0, 4)}...`);
+} catch (error) {
+  console.error('❌ Ошибка декодирования BASE64_HEADER:', error.message);
+  process.exit(1);
+}
 
 // Категории для фильтрации
 const CATEGORY_KEYWORDS = {
@@ -41,12 +53,13 @@ function detectCategory(program) {
 async function fetchAccessToken() {
   const params = new URLSearchParams();
   params.append('grant_type', 'client_credentials');
+  params.append('client_id', clientId);
+  params.append('client_secret', clientSecret);
 
-  console.log('🔐 Получение токена...');
+  console.log('🔐 Получение токена (client_id и client_secret в теле запроса)...');
   const response = await fetch('https://api.admitad.com/token/', {
     method: 'POST',
     headers: {
-      'Authorization': authHeader,
       'Content-Type': 'application/x-www-form-urlencoded',
       'User-Agent': 'SOCHIAUTOPARTS-GitHubAction/1.0',
     },
