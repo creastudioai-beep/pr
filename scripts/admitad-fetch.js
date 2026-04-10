@@ -6,20 +6,16 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Конфигурация из переменных окружения
-const CLIENT_ID = process.env.ADMITAD_CLIENT_ID;
-const CLIENT_SECRET = process.env.ADMITAD_CLIENT_SECRET;
-const SCOPE = process.env.ADMITAD_SCOPE || ''; // необязательно
+const BASE64_HEADER = process.env.BASE64_HEADER;
 
-// Проверка наличия секретов
-if (!CLIENT_ID || !CLIENT_SECRET) {
-  console.error('❌ Отсутствуют ADMITAD_CLIENT_ID или ADMITAD_CLIENT_SECRET в переменных окружения');
+if (!BASE64_HEADER) {
+  console.error('❌ Отсутствует BASE64_HEADER в переменных окружения');
   process.exit(1);
 }
 
-console.log(`🔑 Client ID (первые 4 символа): ${CLIENT_ID.substring(0, 4)}...`);
+console.log('🔑 Используется готовый BASE64_HEADER');
 
-// Категории ключевых слов для фильтрации
+// Категории для фильтрации
 const CATEGORY_KEYWORDS = {
   autoparts: ['автозапчасти', 'запчасти', 'auto parts', 'автодетали'],
   autoinsurance: ['страхование', 'осаго', 'каско', 'insurance', 'автострахование'],
@@ -41,19 +37,14 @@ function detectCategory(program) {
 }
 
 async function fetchAccessToken() {
-  // Создаём тело запроса
   const params = new URLSearchParams();
   params.append('grant_type', 'client_credentials');
-  params.append('client_id', CLIENT_ID);
-  params.append('client_secret', CLIENT_SECRET);
-  if (SCOPE && SCOPE.trim() !== '') {
-    params.append('scope', SCOPE.trim());
-  }
 
-  console.log('🔐 Получение токена через параметры в теле запроса...');
+  console.log('🔐 Получение токена через готовый BASE64_HEADER...');
   const response = await fetch('https://api.admitad.com/token/', {
     method: 'POST',
     headers: {
+      'Authorization': `Basic ${BASE64_HEADER}`,
       'Content-Type': 'application/x-www-form-urlencoded',
       'User-Agent': 'SOCHIAUTOPARTS-GitHubAction/1.0',
     },
@@ -64,7 +55,7 @@ async function fetchAccessToken() {
   console.log(`📨 Ответ сервера (статус ${response.status}): ${responseText}`);
 
   if (!response.ok) {
-    throw new Error(`Не удалось получить токен. Статус: ${response.status}, ответ: ${responseText}`);
+    throw new Error(`Ошибка получения токена: ${responseText}`);
   }
 
   const data = JSON.parse(responseText);
@@ -74,7 +65,7 @@ async function fetchAccessToken() {
 async function main() {
   try {
     const accessToken = await fetchAccessToken();
-    console.log('✅ Токен получен успешно');
+    console.log('✅ Токен получен');
 
     console.log('📡 Загрузка списка программ...');
     const programsResponse = await fetch(
@@ -94,7 +85,7 @@ async function main() {
     const programsData = await programsResponse.json();
     const allPrograms = programsData.results || [];
 
-    console.log(`📊 Всего получено программ: ${allPrograms.length}`);
+    console.log(`📊 Всего программ: ${allPrograms.length}`);
 
     const filteredPrograms = [];
     for (const prog of allPrograms) {
@@ -118,7 +109,7 @@ async function main() {
       });
     }
 
-    console.log(`✅ Отфильтровано программ: ${filteredPrograms.length}`);
+    console.log(`✅ Отфильтровано: ${filteredPrograms.length}`);
 
     const outputData = {
       last_updated: new Date().toISOString(),
@@ -127,11 +118,7 @@ async function main() {
     };
 
     const dataDir = path.join(__dirname, '..', 'data');
-    try {
-      await fs.access(dataDir);
-    } catch {
-      await fs.mkdir(dataDir, { recursive: true });
-    }
+    try { await fs.access(dataDir); } catch { await fs.mkdir(dataDir, { recursive: true }); }
 
     const outputPath = path.join(dataDir, 'admitad_ads.json');
     await fs.writeFile(outputPath, JSON.stringify(outputData, null, 2));
