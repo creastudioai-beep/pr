@@ -1,4 +1,4 @@
-name: Admitad Curl Test
+name: Admitad Curl Debug
 
 on:
   workflow_dispatch:
@@ -7,27 +7,37 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: 🔥 Тест токена через curl
+      - name: 🔥 Тест токена через curl с отладкой
         run: |
-          echo "Отправляю запрос через curl..."
+          set -x  # Вывод каждой команды для отладки
           
-          # Формируем заголовок
+          echo "Проверка curl..."
+          curl --version
+          
+          echo "Формирование заголовка..."
           AUTH_HEADER=$(echo -n "${{ secrets.ADMITAD_CLIENT_ID }}:${{ secrets.ADMITAD_CLIENT_SECRET }}" | base64)
+          echo "Заголовок сформирован."
           
-          # Делаем запрос
+          echo "Отправка запроса..."
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST https://api.admitad.com/token/ \
             -H "Authorization: Basic $AUTH_HEADER" \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "grant_type=client_credentials&scope=advcampaigns advcampaigns_for_website public_data")
           
-          # Выводим результат
+          CURL_EXIT=$?
+          echo "Curl exit code: $CURL_EXIT"
+          
           echo "Ответ от Admitad:"
           echo "$RESPONSE"
           
-          # Проверяем успех
+          if [ $CURL_EXIT -ne 0 ]; then
+            echo "❌ Curl завершился с ошибкой $CURL_EXIT"
+            exit 1
+          fi
+          
           if echo "$RESPONSE" | grep -q '"access_token"'; then
-            echo "✅ Токен получен! Секреты работают. Проблема в парсере."
+            echo "✅ Токен получен! Секреты работают."
           else
-            echo "❌ Ошибка. Секреты не работают или доступ закрыт."
+            echo "❌ Токен не получен. Проверь ответ выше."
             exit 1
           fi
