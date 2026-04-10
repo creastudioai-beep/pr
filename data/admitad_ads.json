@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-10T06:32:01.576Z",
+  "last_updated": "2026-04-10T06:55:06.541Z",
   "website_id": "2929853",
   "total_programs": 7,
   "programs": [
@@ -17,6 +17,9 @@
       },
       "commission": null,
       "products_count": 0,
+      "allowed_regions": [
+        "RU"
+      ],
       "coupons": []
     },
     {
@@ -33,6 +36,9 @@
       },
       "commission": null,
       "products_count": 0,
+      "allowed_regions": [
+        "RU"
+      ],
       "coupons": []
     },
     {
@@ -49,6 +55,9 @@
       },
       "commission": null,
       "products_count": 0,
+      "allowed_regions": [
+        "RU"
+      ],
       "coupons": []
     },
     {
@@ -65,6 +74,9 @@
       },
       "commission": null,
       "products_count": 0,
+      "allowed_regions": [
+        "RU"
+      ],
       "coupons": []
     },
     {
@@ -81,6 +93,9 @@
       },
       "commission": null,
       "products_count": 0,
+      "allowed_regions": [
+        "RU"
+      ],
       "coupons": []
     },
     {
@@ -97,6 +112,9 @@
       },
       "commission": null,
       "products_count": 0,
+      "allowed_regions": [
+        "RU"
+      ],
       "coupons": []
     },
     {
@@ -113,6 +131,9 @@
       },
       "commission": null,
       "products_count": 0,
+      "allowed_regions": [
+        "RU"
+      ],
       "coupons": []
     }
   ]
