@@ -2,8 +2,8 @@ name: Sync Admitad Ads
 
 on:
   schedule:
-    - cron: '0 * * * *'   # каждый час
-  workflow_dispatch:      # ручной запуск
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 jobs:
   fetch-and-commit:
@@ -15,12 +15,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'   # актуальная LTS на 2026 год
+          node-version: '24'
 
       - name: Run Admitad parser
         env:
-          ADMITAD_CLIENT_ID: ${{ secrets.ADMITAD_CLIENT_ID }}
-          ADMITAD_CLIENT_SECRET: ${{ secrets.ADMITAD_CLIENT_SECRET }}
+          BASE64_HEADER: ${{ secrets.BASE64_HEADER }}
         run: node scripts/admitad-fetch.js
 
       - name: Commit and push if changed
