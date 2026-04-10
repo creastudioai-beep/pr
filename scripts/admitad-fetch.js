@@ -196,6 +196,12 @@ async function main() {
         }
       }
 
+      // Извлекаем разрешённые регионы
+      let allowedRegions = [];
+      if (prog.regions && Array.isArray(prog.regions)) {
+        allowedRegions = prog.regions.map(r => r.region || r).filter(Boolean);
+      }
+
       // Ищем купоны, привязанные к данной программе
       const programCoupons = allCoupons.filter(c => c.campaign && c.campaign.id === prog.id);
 
@@ -213,6 +219,7 @@ async function main() {
         },
         commission: prog.commission || null,
         products_count: prog.products_count || 0,
+        allowed_regions: allowedRegions, // <-- Новое поле
         coupons: programCoupons.map(c => ({
           id: c.id,
           name: c.name,
