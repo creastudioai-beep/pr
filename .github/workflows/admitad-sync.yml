@@ -1,72 +1,33 @@
-name: Admitad Data Sync
+name: Admitad Curl Test
 
 on:
-  schedule:
-    - cron: '0 */6 * * *'
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
-  sync-admitad:
+  test:
     runs-on: ubuntu-latest
-    # ⛔ ВАЖНО: Строки environment: быть НЕ ДОЛЖНО!
-    # Если она есть, GitHub игнорирует Repository secrets.
-    
-    permissions:
-      contents: write
-    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      # 🔍 Debug-шаг покажет, видит ли GitHub секреты
-      - name: 🔍 Проверка секретов
+      - name: 🔥 Тест токена через curl
         run: |
-          echo "Проверяю наличие секретов в Repository Secrets..."
+          echo "Отправляю запрос через curl..."
           
-          if [ -z "${{ secrets.ADMITAD_CLIENT_ID }}" ]; then
-            echo "❌ ОШИБКА: ADMITAD_CLIENT_ID пустой!"
-            echo "GitHub не видит этот секрет в Repository Secrets."
-            echo "1. Проверь Settings → Secrets and variables → Actions → Repository secrets."
-            echo "2. Убедись, что секрет НЕ во вкладке Variables."
-            echo "3. Убедись, что в workflow нет строки 'environment:'."
+          # Формируем заголовок
+          AUTH_HEADER=$(echo -n "${{ secrets.ADMITAD_CLIENT_ID }}:${{ secrets.ADMITAD_CLIENT_SECRET }}" | base64)
+          
+          # Делаем запрос
+          RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST https://api.admitad.com/token/ \
+            -H "Authorization: Basic $AUTH_HEADER" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=client_credentials&scope=advcampaigns advcampaigns_for_website public_data")
+          
+          # Выводим результат
+          echo "Ответ от Admitad:"
+          echo "$RESPONSE"
+          
+          # Проверяем успех
+          if echo "$RESPONSE" | grep -q '"access_token"'; then
+            echo "✅ Токен получен! Секреты работают. Проблема в парсере."
+          else
+            echo "❌ Ошибка. Секреты не работают или доступ закрыт."
             exit 1
           fi
-          
-          if [ -z "${{ secrets.ADMITAD_CLIENT_SECRET }}" ]; then
-            echo "❌ ОШИБКА: ADMITAD_CLIENT_SECRET пустой!"
-            exit 1
-          fi
-          
-          if [ -z "${{ secrets.ADMITAD_WEBSITE_ID }}" ]; then
-            echo "❌ ОШИБКА: ADMITAD_WEBSITE_ID пустой!"
-            exit 1
-          fi
-          
-          echo "✅ Все секреты присутствуют!"
-
-      - name: Install
-        run: npm ci
-        
-      - name: Run Parser
-        env:
-          ADMITAD_CLIENT_ID: ${{ secrets.ADMITAD_CLIENT_ID }}
-          ADMITAD_CLIENT_SECRET: ${{ secrets.ADMITAD_CLIENT_SECRET }}
-          ADMITAD_WEBSITE_ID: ${{ secrets.ADMITAD_WEBSITE_ID }}
-        run: node scripts/admitad-parser.js
-        
-      - name: Commit
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add public/admitad-data.json
-          git diff --staged --quiet || git commit -m "🔄 Update Admitad data [skip ci]"
-          git push
