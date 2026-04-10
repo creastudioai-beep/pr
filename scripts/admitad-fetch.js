@@ -7,30 +7,35 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const BASE64_HEADER = process.env.BASE64_HEADER;
-const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns'; // <-- изменён дефолтный scope
+const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID; // новый параметр
+const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns';
 
 if (!BASE64_HEADER) {
   console.error('❌ Отсутствует BASE64_HEADER в переменных окружения');
   process.exit(1);
 }
 
-// Декодируем Base64
+if (!WEBSITE_ID) {
+  console.warn('⚠️ ADMITAD_WEBSITE_ID не задан. Будут получены все программы.');
+}
+
+// Декодируем Base64, чтобы получить client_id:client_secret
 let clientId, clientSecret;
 try {
   const decoded = Buffer.from(BASE64_HEADER, 'base64').toString('utf8');
   const parts = decoded.split(':');
   if (parts.length !== 2) {
-    throw new Error('Некорректный формат BASE64_HEADER');
+    throw new Error('Некорректный формат BASE64_HEADER: ожидается "client_id:client_secret"');
   }
   clientId = parts[0];
   clientSecret = parts[1];
   console.log(`🔑 Client ID (первые 4): ${clientId.substring(0, 4)}...`);
 } catch (error) {
-  console.error('❌ Ошибка декодирования:', error.message);
+  console.error('❌ Ошибка декодирования BASE64_HEADER:', error.message);
   process.exit(1);
 }
 
-// Категории
+// Категории для фильтрации
 const CATEGORY_KEYWORDS = {
   autoparts: ['автозапчасти', 'запчасти', 'auto parts', 'автодетали'],
   autoinsurance: ['страхование', 'осаго', 'каско', 'insurance', 'автострахование'],
@@ -69,10 +74,10 @@ async function fetchAccessToken() {
   });
 
   const responseText = await response.text();
-  console.log(`📨 Ответ (${response.status}): ${responseText.substring(0, 200)}`);
+  console.log(`📨 Ответ (${response.status}): ${responseText.substring(0, 100)}...`);
 
   if (!response.ok) {
-    throw new Error(`Ошибка токена: ${responseText}`);
+    throw new Error(`Ошибка получения токена: ${responseText}`);
   }
 
   const data = JSON.parse(responseText);
@@ -84,47 +89,31 @@ async function main() {
     const accessToken = await fetchAccessToken();
     console.log('✅ Токен получен');
 
-    console.log('📡 Загрузка программ...');
-    // Пробуем разные эндпоинты, если первый не сработает
-    const endpoints = [
-      'https://api.admitad.com/advcampaigns/?limit=100',
-      'https://api.admitad.com/campaigns/?limit=100',
-    ];
-
-    let programsData = null;
-    let lastError = null;
-
-    for (const url of endpoints) {
-      try {
-        const response = await fetch(url, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'User-Agent': 'SOCHIAUTOPARTS-GitHubAction/1.0',
-          },
-        });
-
-        const responseText = await response.text();
-        console.log(`🔍 ${url} → ${response.status}`);
-
-        if (response.ok) {
-          programsData = JSON.parse(responseText);
-          break;
-        } else {
-          console.log(`   Ответ: ${responseText.substring(0, 300)}`);
-          lastError = `Статус ${response.status}: ${responseText}`;
-        }
-      } catch (e) {
-        lastError = e.message;
-      }
+    // Строим URL с параметром website, если он задан
+    let apiUrl = `https://api.admitad.com/advcampaigns/?limit=200`; // увеличим лимит
+    if (WEBSITE_ID) {
+      apiUrl += `&website=${WEBSITE_ID}`;
+      console.log(`📡 Загрузка программ для площадки ${WEBSITE_ID}...`);
+    } else {
+      console.log('📡 Загрузка всех доступных программ...');
     }
 
-    if (!programsData) {
-      throw new Error(`Не удалось загрузить программы: ${lastError}`);
+    const programsResponse = await fetch(apiUrl, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'User-Agent': 'SOCHIAUTOPARTS-GitHubAction/1.0',
+      },
+    });
+
+    if (!programsResponse.ok) {
+      const errText = await programsResponse.text();
+      throw new Error(`Ошибка загрузки программ: ${programsResponse.status} - ${errText}`);
     }
 
-    const allPrograms = programsData.results || programsData._embedded?.['advcampaigns'] || [];
+    const programsData = await programsResponse.json();
+    const allPrograms = programsData.results || [];
 
-    console.log(`📊 Всего программ: ${allPrograms.length}`);
+    console.log(`📊 Получено программ: ${allPrograms.length}`);
 
     const filteredPrograms = [];
     for (const prog of allPrograms) {
@@ -148,10 +137,11 @@ async function main() {
       });
     }
 
-    console.log(`✅ Отфильтровано: ${filteredPrograms.length}`);
+    console.log(`✅ Отфильтровано по категориям: ${filteredPrograms.length}`);
 
     const outputData = {
       last_updated: new Date().toISOString(),
+      website_id: WEBSITE_ID || null,
       total_programs: filteredPrograms.length,
       programs: filteredPrograms,
     };
