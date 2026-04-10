@@ -6,20 +6,17 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Переменные окружения
 const BASE64_HEADER = process.env.BASE64_HEADER;
 const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID;
-const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns';
+const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns coupons';
 
 if (!BASE64_HEADER) {
   console.error('❌ Отсутствует BASE64_HEADER в переменных окружения');
   process.exit(1);
 }
 
-if (!WEBSITE_ID) {
-  console.warn('⚠️ ADMITAD_WEBSITE_ID не задан. Будут получены все программы.');
-}
-
-// Декодируем Base64, чтобы получить client_id:client_secret
+// Декодируем Base64 для получения client_id:client_secret
 let clientId, clientSecret;
 try {
   const decoded = Buffer.from(BASE64_HEADER, 'base64').toString('utf8');
@@ -35,7 +32,7 @@ try {
   process.exit(1);
 }
 
-// Категории для фильтрации
+// Категории ключевых слов для фильтрации
 const CATEGORY_KEYWORDS = {
   autoparts: ['автозапчасти', 'запчасти', 'auto parts', 'автодетали'],
   autoinsurance: ['страхование', 'осаго', 'каско', 'insurance', 'автострахование'],
@@ -89,38 +86,65 @@ async function main() {
     const accessToken = await fetchAccessToken();
     console.log('✅ Токен получен');
 
-    // Строим URL с параметром website, если он задан
-    let apiUrl = `https://api.admitad.com/advcampaigns/?limit=200`; // увеличен лимит
+    // Строим URL для программ
+    let campaignsUrl = `https://api.admitad.com/advcampaigns/?limit=200`;
     if (WEBSITE_ID) {
-      apiUrl += `&website=${WEBSITE_ID}`;
+      campaignsUrl += `&website=${WEBSITE_ID}`;
       console.log(`📡 Загрузка программ для площадки ${WEBSITE_ID}...`);
     } else {
       console.log('📡 Загрузка всех доступных программ...');
     }
 
-    const programsResponse = await fetch(apiUrl, {
+    const campaignsResponse = await fetch(campaignsUrl, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'User-Agent': 'SOCHIAUTOPARTS-GitHubAction/1.0',
       },
     });
 
-    if (!programsResponse.ok) {
-      const errText = await programsResponse.text();
-      throw new Error(`Ошибка загрузки программ: ${programsResponse.status} - ${errText}`);
+    if (!campaignsResponse.ok) {
+      const errText = await campaignsResponse.text();
+      throw new Error(`Ошибка загрузки программ: ${campaignsResponse.status} - ${errText}`);
     }
 
-    const programsData = await programsResponse.json();
-    const allPrograms = programsData.results || [];
-
+    const campaignsData = await campaignsResponse.json();
+    const allPrograms = campaignsData.results || [];
     console.log(`📊 Получено программ: ${allPrograms.length}`);
 
-    const filteredPrograms = [];
+    // Загрузка купонов
+    console.log('🎫 Загрузка купонов...');
+    let allCoupons = [];
+    try {
+      const couponsResponse = await fetch(
+        `https://api.admitad.com/coupons/?limit=500&has_affiliate_link=true`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'User-Agent': 'SOCHIAUTOPARTS-GitHubAction/1.0',
+          },
+        }
+      );
+      if (couponsResponse.ok) {
+        const couponsData = await couponsResponse.json();
+        allCoupons = couponsData.results || [];
+        console.log(`🎫 Получено купонов: ${allCoupons.length}`);
+      } else {
+        console.warn(`⚠️ Не удалось загрузить купоны: ${couponsResponse.status}`);
+      }
+    } catch (couponError) {
+      console.warn(`⚠️ Ошибка при загрузке купонов: ${couponError.message}`);
+    }
+
+    // Обогащаем программы купонами и фильтруем
+    const enrichedPrograms = [];
     for (const prog of allPrograms) {
       const category = detectCategory(prog);
       if (!category) continue;
 
-      filteredPrograms.push({
+      // Ищем купоны, привязанные к данной программе
+      const programCoupons = allCoupons.filter(c => c.campaign && c.campaign.id === prog.id);
+
+      enrichedPrograms.push({
         id: prog.id,
         name: prog.name,
         description: prog.description || '',
@@ -134,20 +158,34 @@ async function main() {
         },
         commission: prog.commission || null,
         products_count: prog.products_count || 0,
+        coupons: programCoupons.map(c => ({
+          id: c.id,
+          name: c.name,
+          promocode: c.promocode,
+          description: c.description,
+          date_start: c.date_start,
+          date_end: c.date_end,
+          discount: c.discount,
+          goto_link: c.goto_link,
+        })),
       });
     }
 
-    console.log(`✅ Отфильтровано по категориям: ${filteredPrograms.length}`);
+    console.log(`✅ Отфильтровано программ: ${enrichedPrograms.length}`);
 
     const outputData = {
       last_updated: new Date().toISOString(),
       website_id: WEBSITE_ID || null,
-      total_programs: filteredPrograms.length,
-      programs: filteredPrograms,
+      total_programs: enrichedPrograms.length,
+      programs: enrichedPrograms,
     };
 
     const dataDir = path.join(__dirname, '..', 'data');
-    try { await fs.access(dataDir); } catch { await fs.mkdir(dataDir, { recursive: true }); }
+    try {
+      await fs.access(dataDir);
+    } catch {
+      await fs.mkdir(dataDir, { recursive: true });
+    }
 
     const outputPath = path.join(dataDir, 'admitad_ads.json');
     await fs.writeFile(outputPath, JSON.stringify(outputData, null, 2));
