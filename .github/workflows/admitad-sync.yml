@@ -1,4 +1,4 @@
-name: Admitad Curl Debug
+name: Admitad Curl Fixed
 
 on:
   workflow_dispatch:
@@ -7,16 +7,15 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: 🔥 Тест токена через curl с отладкой
+      - name: 🔥 Тест токена через curl (FIXED)
         run: |
-          set -x  # Вывод каждой команды для отладки
+          set -x
           
-          echo "Проверка curl..."
-          curl --version
+          echo "Формирование заголовка с base64 -w 0..."
+          # -w 0 отключает переносы строк!
+          AUTH_HEADER=$(echo -n "${{ secrets.ADMITAD_CLIENT_ID }}:${{ secrets.ADMITAD_CLIENT_SECRET }}" | base64 -w 0)
           
-          echo "Формирование заголовка..."
-          AUTH_HEADER=$(echo -n "${{ secrets.ADMITAD_CLIENT_ID }}:${{ secrets.ADMITAD_CLIENT_SECRET }}" | base64)
-          echo "Заголовок сформирован."
+          echo "Длина заголовка: ${#AUTH_HEADER}"
           
           echo "Отправка запроса..."
           RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST https://api.admitad.com/token/ \
@@ -31,12 +30,13 @@ jobs:
           echo "$RESPONSE"
           
           if [ $CURL_EXIT -ne 0 ]; then
-            echo "❌ Curl завершился с ошибкой $CURL_EXIT"
+            echo "❌ Curl упал с кодом $CURL_EXIT"
             exit 1
           fi
           
           if echo "$RESPONSE" | grep -q '"access_token"'; then
-            echo "✅ Токен получен! Секреты работают."
+            echo "✅ ТОКЕН ПОЛУЧЕН! Секреты работают."
+            echo "Проблема была в base64 без -w 0 или в парсере."
           else
             echo "❌ Токен не получен. Проверь ответ выше."
             exit 1
