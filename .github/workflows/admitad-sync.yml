@@ -28,23 +28,23 @@ jobs:
           cache: 'npm'
 
       # 🔍 Debug-шаг покажет, видит ли GitHub секреты
-      - name: 🔍 Debug Secrets Availability
+      - name: 🔍 Debug Secrets
         run: |
-          echo "Checking secrets..."
+          echo "Checking secrets availability..."
           echo "ADMITAD_CLIENT_ID present: ${{ secrets.ADMITAD_CLIENT_ID != '' }}"
           echo "ADMITAD_CLIENT_SECRET present: ${{ secrets.ADMITAD_CLIENT_SECRET != '' }}"
           echo "ADMITAD_WEBSITE_ID present: ${{ secrets.ADMITAD_WEBSITE_ID != '' }}"
           
           if [ "${{ secrets.ADMITAD_CLIENT_ID }}" = "" ]; then
-            echo "❌ ERROR: ADMITAD_CLIENT_ID is empty! Check Repository Secrets."
+            echo "❌ ERROR: ADMITAD_CLIENT_ID is empty!"
             exit 1
           fi
           if [ "${{ secrets.ADMITAD_CLIENT_SECRET }}" = "" ]; then
-            echo "❌ ERROR: ADMITAD_CLIENT_SECRET is empty! Check Repository Secrets."
+            echo "❌ ERROR: ADMITAD_CLIENT_SECRET is empty!"
             exit 1
           fi
           if [ "${{ secrets.ADMITAD_WEBSITE_ID }}" = "" ]; then
-            echo "❌ ERROR: ADMITAD_WEBSITE_ID is empty! Check Repository Secrets."
+            echo "❌ ERROR: ADMITAD_WEBSITE_ID is empty!"
             exit 1
           fi
           
