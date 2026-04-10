@@ -13,7 +13,9 @@ if (!BASE64_HEADER) {
   process.exit(1);
 }
 
-console.log('🔑 Используется готовый BASE64_HEADER');
+// Определяем, содержит ли секрет уже префикс "Basic"
+const authHeader = BASE64_HEADER.startsWith('Basic ') ? BASE64_HEADER : `Basic ${BASE64_HEADER}`;
+console.log('🔑 Используется Authorization заголовок (первые 20 символов):', authHeader.substring(0, 20) + '...');
 
 // Категории для фильтрации
 const CATEGORY_KEYWORDS = {
@@ -40,11 +42,11 @@ async function fetchAccessToken() {
   const params = new URLSearchParams();
   params.append('grant_type', 'client_credentials');
 
-  console.log('🔐 Получение токена через готовый BASE64_HEADER...');
+  console.log('🔐 Получение токена...');
   const response = await fetch('https://api.admitad.com/token/', {
     method: 'POST',
     headers: {
-      'Authorization': `Basic ${BASE64_HEADER}`,
+      'Authorization': authHeader,
       'Content-Type': 'application/x-www-form-urlencoded',
       'User-Agent': 'SOCHIAUTOPARTS-GitHubAction/1.0',
     },
