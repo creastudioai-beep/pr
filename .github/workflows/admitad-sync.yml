@@ -12,7 +12,7 @@ jobs:
   sync-admitad:
     runs-on: ubuntu-latest
     # ⛔ ВАЖНО: Строки environment: быть НЕ должно!
-    # Иначе GitHub игнорирует Repository secrets и ищет пустые Environment secrets.
+    # Иначе GitHub игнорирует Repository secrets.
     
     permissions:
       contents: write
@@ -39,6 +39,16 @@ jobs:
             echo "❌ ERROR: ADMITAD_CLIENT_ID is empty! Check Repository Secrets."
             exit 1
           fi
+          if [ "${{ secrets.ADMITAD_CLIENT_SECRET }}" = "" ]; then
+            echo "❌ ERROR: ADMITAD_CLIENT_SECRET is empty! Check Repository Secrets."
+            exit 1
+          fi
+          if [ "${{ secrets.ADMITAD_WEBSITE_ID }}" = "" ]; then
+            echo "❌ ERROR: ADMITAD_WEBSITE_ID is empty! Check Repository Secrets."
+            exit 1
+          fi
+          
+          echo "✅ All secrets are present!"
 
       - name: Install dependencies
         run: npm ci
