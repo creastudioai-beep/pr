@@ -7,30 +7,30 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const BASE64_HEADER = process.env.BASE64_HEADER;
-const SCOPE = process.env.ADMITAD_SCOPE || 'public_data'; // <-- новый параметр
+const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns'; // <-- изменён дефолтный scope
 
 if (!BASE64_HEADER) {
   console.error('❌ Отсутствует BASE64_HEADER в переменных окружения');
   process.exit(1);
 }
 
-// Декодируем Base64, чтобы получить client_id:client_secret
+// Декодируем Base64
 let clientId, clientSecret;
 try {
   const decoded = Buffer.from(BASE64_HEADER, 'base64').toString('utf8');
   const parts = decoded.split(':');
   if (parts.length !== 2) {
-    throw new Error('Некорректный формат BASE64_HEADER: ожидается "client_id:client_secret"');
+    throw new Error('Некорректный формат BASE64_HEADER');
   }
   clientId = parts[0];
   clientSecret = parts[1];
-  console.log(`🔑 Извлечён Client ID (первые 4 символа): ${clientId.substring(0, 4)}...`);
+  console.log(`🔑 Client ID (первые 4): ${clientId.substring(0, 4)}...`);
 } catch (error) {
-  console.error('❌ Ошибка декодирования BASE64_HEADER:', error.message);
+  console.error('❌ Ошибка декодирования:', error.message);
   process.exit(1);
 }
 
-// Категории для фильтрации
+// Категории
 const CATEGORY_KEYWORDS = {
   autoparts: ['автозапчасти', 'запчасти', 'auto parts', 'автодетали'],
   autoinsurance: ['страхование', 'осаго', 'каско', 'insurance', 'автострахование'],
@@ -56,9 +56,9 @@ async function fetchAccessToken() {
   params.append('grant_type', 'client_credentials');
   params.append('client_id', clientId);
   params.append('client_secret', clientSecret);
-  params.append('scope', SCOPE); // <-- добавлен scope
+  params.append('scope', SCOPE);
 
-  console.log(`🔐 Получение токена (scope: ${SCOPE})...`);
+  console.log(`🔐 Запрос токена со scope: ${SCOPE}`);
   const response = await fetch('https://api.admitad.com/token/', {
     method: 'POST',
     headers: {
@@ -69,10 +69,10 @@ async function fetchAccessToken() {
   });
 
   const responseText = await response.text();
-  console.log(`📨 Ответ сервера (статус ${response.status}): ${responseText}`);
+  console.log(`📨 Ответ (${response.status}): ${responseText.substring(0, 200)}`);
 
   if (!response.ok) {
-    throw new Error(`Ошибка получения токена: ${responseText}`);
+    throw new Error(`Ошибка токена: ${responseText}`);
   }
 
   const data = JSON.parse(responseText);
@@ -84,23 +84,45 @@ async function main() {
     const accessToken = await fetchAccessToken();
     console.log('✅ Токен получен');
 
-    console.log('📡 Загрузка списка программ...');
-    const programsResponse = await fetch(
-      `https://api.admitad.com/advcampaigns/?limit=100`,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'User-Agent': 'SOCHIAUTOPARTS-GitHubAction/1.0',
-        },
-      }
-    );
+    console.log('📡 Загрузка программ...');
+    // Пробуем разные эндпоинты, если первый не сработает
+    const endpoints = [
+      'https://api.admitad.com/advcampaigns/?limit=100',
+      'https://api.admitad.com/campaigns/?limit=100',
+    ];
 
-    if (!programsResponse.ok) {
-      throw new Error(`Ошибка загрузки программ: ${programsResponse.status}`);
+    let programsData = null;
+    let lastError = null;
+
+    for (const url of endpoints) {
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'User-Agent': 'SOCHIAUTOPARTS-GitHubAction/1.0',
+          },
+        });
+
+        const responseText = await response.text();
+        console.log(`🔍 ${url} → ${response.status}`);
+
+        if (response.ok) {
+          programsData = JSON.parse(responseText);
+          break;
+        } else {
+          console.log(`   Ответ: ${responseText.substring(0, 300)}`);
+          lastError = `Статус ${response.status}: ${responseText}`;
+        }
+      } catch (e) {
+        lastError = e.message;
+      }
     }
 
-    const programsData = await programsResponse.json();
-    const allPrograms = programsData.results || [];
+    if (!programsData) {
+      throw new Error(`Не удалось загрузить программы: ${lastError}`);
+    }
+
+    const allPrograms = programsData.results || programsData._embedded?.['advcampaigns'] || [];
 
     console.log(`📊 Всего программ: ${allPrograms.length}`);
 
