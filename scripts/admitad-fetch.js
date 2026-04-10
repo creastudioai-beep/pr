@@ -81,6 +81,35 @@ async function fetchAccessToken() {
   return data.access_token;
 }
 
+/**
+ * Получение подробной информации о рекламодателе
+ * @param {number} advertiserId - ID рекламодателя
+ * @param {string} accessToken
+ * @returns {Promise<{name: string, inn: string}>}
+ */
+async function fetchAdvertiserInfo(advertiserId, accessToken) {
+  try {
+    const response = await fetch(`https://api.admitad.com/advertiser/${advertiserId}/info/`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'User-Agent': 'SOCHIAUTOPARTS-GitHubAction/1.0',
+      },
+    });
+    if (!response.ok) {
+      console.warn(`⚠️ Не удалось получить данные рекламодателя ${advertiserId}: ${response.status}`);
+      return null;
+    }
+    const data = await response.json();
+    // Поля могут называться по-разному, пробуем разные варианты
+    const name = data.name || data.company_name || data.advertiser_name || '';
+    const inn = data.inn || data.tax_id || data.vat_id || '';
+    return { name, inn };
+  } catch (error) {
+    console.warn(`⚠️ Ошибка запроса информации о рекламодателе ${advertiserId}: ${error.message}`);
+    return null;
+  }
+}
+
 async function main() {
   try {
     const accessToken = await fetchAccessToken();
@@ -135,11 +164,37 @@ async function main() {
       console.warn(`⚠️ Ошибка при загрузке купонов: ${couponError.message}`);
     }
 
+    // Кэш для данных рекламодателей, чтобы не делать повторные запросы
+    const advertiserCache = new Map();
+
     // Обогащаем программы купонами и фильтруем
     const enrichedPrograms = [];
     for (const prog of allPrograms) {
       const category = detectCategory(prog);
       if (!category) continue;
+
+      // Получаем юридическую информацию
+      let legalInfo = prog.advertiser_legal_info || {
+        name: prog.advertiser_name || prog.name,
+        inn: prog.advertiser_inn || '',
+      };
+
+      // Если ИНН отсутствует и есть advertiser_id, пытаемся получить через отдельный запрос
+      if ((!legalInfo.inn || legalInfo.inn.trim() === '') && prog.advertiser_id) {
+        const advertiserId = prog.advertiser_id;
+        if (!advertiserCache.has(advertiserId)) {
+          console.log(`🔍 Запрашиваем данные рекламодателя ${advertiserId}...`);
+          const info = await fetchAdvertiserInfo(advertiserId, accessToken);
+          advertiserCache.set(advertiserId, info);
+        }
+        const info = advertiserCache.get(advertiserId);
+        if (info) {
+          legalInfo = {
+            name: legalInfo.name || info.name,
+            inn: info.inn || legalInfo.inn,
+          };
+        }
+      }
 
       // Ищем купоны, привязанные к данной программе
       const programCoupons = allCoupons.filter(c => c.campaign && c.campaign.id === prog.id);
@@ -152,9 +207,9 @@ async function main() {
         goto_link: prog.goto_link || prog.site_url,
         site_url: prog.site_url,
         category: category,
-        advertiser_legal_info: prog.advertiser_legal_info || {
-          name: prog.advertiser_name || prog.name,
-          inn: prog.advertiser_inn || '',
+        advertiser_legal_info: {
+          name: legalInfo.name || prog.name,
+          inn: legalInfo.inn || '',
         },
         commission: prog.commission || null,
         products_count: prog.products_count || 0,
