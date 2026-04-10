@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const ADMITAD_API = 'https://api.admitad.com';
+const AUTH_HEADER = process.env.ADMITAD_AUTH_HEADER;
 const CLIENT_ID = process.env.ADMITAD_CLIENT_ID;
 const CLIENT_SECRET = process.env.ADMITAD_CLIENT_SECRET;
 const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID;
@@ -60,45 +61,54 @@ class AdmitadParser {
     this.programs = [];
   }
 
+  getAuthHeader() {
+    if (AUTH_HEADER) {
+      return AUTH_HEADER.trim();
+    }
+    if (CLIENT_ID && CLIENT_SECRET) {
+      return Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
+    }
+    throw new Error('Missing auth credentials! Set ADMITAD_AUTH_HEADER or ADMITAD_CLIENT_ID + ADMITAD_CLIENT_SECRET.');
+  }
+
   async getToken() {
     console.log('🔑 Получение access token...');
 
-    if (!CLIENT_ID) {
-      throw new Error('ADMITAD_CLIENT_ID is not set! Check GitHub Secrets.');
-    }
-    if (!CLIENT_SECRET) {
-      throw new Error('ADMITAD_CLIENT_SECRET is not set! Check GitHub Secrets.');
-    }
     if (!WEBSITE_ID) {
       throw new Error('ADMITAD_WEBSITE_ID is not set! Check GitHub Secrets.');
     }
 
-    const auth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
+    const authHeader = this.getAuthHeader();
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    const response = await fetch(`${ADMITAD_API}/token/`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: 'grant_type=client_credentials&scope=advcampaigns advcampaigns_for_website public_data',
-      signal: controller.signal
-    });
+    try {
+      const response = await fetch(`${ADMITAD_API}/token/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${authHeader}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: 'grant_type=client_credentials&scope=advcampaigns advcampaigns_for_website public_data',
+        signal: controller.signal
+      });
 
-    clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Token error: ${response.status} ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Token error: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
+      this.accessToken = data.access_token;
+      console.log('✅ Token получен');
+      return this.accessToken;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
     }
-
-    const data = await response.json();
-    this.accessToken = data.access_token;
-    console.log('✅ Token получен');
-    return this.accessToken;
   }
 
   async fetchPrograms() {
@@ -112,39 +122,43 @@ class AdmitadParser {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const response = await fetch(
-        `${ADMITAD_API}/advcampaigns/website/${WEBSITE_ID}/?limit=${limit}&offset=${offset}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.accessToken}`
-          },
-          signal: controller.signal
+      try {
+        const response = await fetch(
+          `${ADMITAD_API}/advcampaigns/website/${WEBSITE_ID}/?limit=${limit}&offset=${offset}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${this.accessToken}`
+            },
+            signal: controller.signal
+          }
+        );
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: Failed to fetch programs. Response: ${errorText}`);
         }
-      );
 
-      clearTimeout(timeoutId);
+        const data = await response.json();
 
-      // 🔥 ЖЁСТКАЯ ПРОВЕРКА: если ошибка — выбрасываем исключение
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: Failed to fetch programs. Response: ${errorText}`);
+        if (!data.results || data.results.length === 0) {
+          break;
+        }
+
+        allPrograms = allPrograms.concat(data.results);
+        console.log(`   Загружено: ${allPrograms.length} программ...`);
+
+        if (data.results.length < limit) {
+          break;
+        }
+
+        offset += limit;
+        await new Promise(r => setTimeout(r, 200));
+      } catch (error) {
+        clearTimeout(timeoutId);
+        throw error;
       }
-
-      const data = await response.json();
-
-      if (!data.results || data.results.length === 0) {
-        break;
-      }
-
-      allPrograms = allPrograms.concat(data.results);
-      console.log(`   Загружено: ${allPrograms.length} программ...`);
-
-      if (data.results.length < limit) {
-        break;
-      }
-
-      offset += limit;
-      await new Promise(r => setTimeout(r, 200));
     }
 
     this.programs = allPrograms;
