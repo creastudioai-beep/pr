@@ -36,15 +36,15 @@ jobs:
           echo "ADMITAD_WEBSITE_ID present: ${{ secrets.ADMITAD_WEBSITE_ID != '' }}"
           
           if [ "${{ secrets.ADMITAD_CLIENT_ID }}" = "" ]; then
-            echo "❌ ERROR: ADMITAD_CLIENT_ID is empty!"
+            echo "❌ ERROR: ADMITAD_CLIENT_ID is empty! Check Repository Secrets."
             exit 1
           fi
           if [ "${{ secrets.ADMITAD_CLIENT_SECRET }}" = "" ]; then
-            echo "❌ ERROR: ADMITAD_CLIENT_SECRET is empty!"
+            echo "❌ ERROR: ADMITAD_CLIENT_SECRET is empty! Check Repository Secrets."
             exit 1
           fi
           if [ "${{ secrets.ADMITAD_WEBSITE_ID }}" = "" ]; then
-            echo "❌ ERROR: ADMITAD_WEBSITE_ID is empty!"
+            echo "❌ ERROR: ADMITAD_WEBSITE_ID is empty! Check Repository Secrets."
             exit 1
           fi
           
