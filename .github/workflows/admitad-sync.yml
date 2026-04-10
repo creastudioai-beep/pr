@@ -11,56 +11,57 @@ env:
 jobs:
   sync-admitad:
     runs-on: ubuntu-latest
-    # ⛔ ВАЖНО: Строки environment: быть НЕ должно!
-    # Иначе GitHub игнорирует Repository secrets.
+    # ⛔ ВАЖНО: Строки environment: быть НЕ ДОЛЖНО!
+    # Иначе GitHub игнорирует Repository secrets и смотрит в пустое окружение.
     
     permissions:
       contents: write
     
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
         
-      - name: Setup Node.js 24
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: 'npm'
 
-      # 🔍 Debug-шаг покажет, видит ли GitHub секреты
-      - name: 🔍 Debug Secrets
+      # 🔥 Проверка: упадёт с понятной ошибкой, если секреты пустые
+      - name: 🔍 Проверка секретов
         run: |
-          echo "Checking secrets availability..."
-          echo "ADMITAD_CLIENT_ID present: ${{ secrets.ADMITAD_CLIENT_ID != '' }}"
-          echo "ADMITAD_CLIENT_SECRET present: ${{ secrets.ADMITAD_CLIENT_SECRET != '' }}"
-          echo "ADMITAD_WEBSITE_ID present: ${{ secrets.ADMITAD_WEBSITE_ID != '' }}"
+          echo "Проверяю наличие секретов в Repository Secrets..."
           
-          if [ "${{ secrets.ADMITAD_CLIENT_ID }}" = "" ]; then
-            echo "❌ ERROR: ADMITAD_CLIENT_ID is empty! Check Repository Secrets."
-            exit 1
-          fi
-          if [ "${{ secrets.ADMITAD_CLIENT_SECRET }}" = "" ]; then
-            echo "❌ ERROR: ADMITAD_CLIENT_SECRET is empty! Check Repository Secrets."
-            exit 1
-          fi
-          if [ "${{ secrets.ADMITAD_WEBSITE_ID }}" = "" ]; then
-            echo "❌ ERROR: ADMITAD_WEBSITE_ID is empty! Check Repository Secrets."
+          if [ -z "${{ secrets.ADMITAD_CLIENT_ID }}" ]; then
+            echo "❌ ОШИБКА: ADMITAD_CLIENT_ID пустой!"
+            echo "Проверь Settings → Secrets and variables → Actions → Repository secrets."
+            echo "Убедись, что секрет создан именно как SECRET, а не VARIABLE."
             exit 1
           fi
           
-          echo "✅ All secrets are present!"
+          if [ -z "${{ secrets.ADMITAD_CLIENT_SECRET }}" ]; then
+            echo "❌ ОШИБКА: ADMITAD_CLIENT_SECRET пустой!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ADMITAD_WEBSITE_ID }}" ]; then
+            echo "❌ ОШИБКА: ADMITAD_WEBSITE_ID пустой!"
+            exit 1
+          fi
+          
+          echo "✅ Все секреты присутствуют!"
 
-      - name: Install dependencies
+      - name: Install
         run: npm ci
         
-      - name: Run Admitad Parser
+      - name: Run Parser
         env:
           ADMITAD_CLIENT_ID: ${{ secrets.ADMITAD_CLIENT_ID }}
           ADMITAD_CLIENT_SECRET: ${{ secrets.ADMITAD_CLIENT_SECRET }}
           ADMITAD_WEBSITE_ID: ${{ secrets.ADMITAD_WEBSITE_ID }}
         run: node scripts/admitad-parser.js
         
-      - name: Commit and push changes
+      - name: Commit
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
