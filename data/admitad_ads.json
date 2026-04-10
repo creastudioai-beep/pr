@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-10T06:01:07.472Z",
+  "last_updated": "2026-04-10T06:27:27.810Z",
   "website_id": "2929853",
   "total_programs": 7,
   "programs": [
@@ -16,7 +16,8 @@
         "inn": ""
       },
       "commission": null,
-      "products_count": 0
+      "products_count": 0,
+      "coupons": []
     },
     {
       "id": 117397,
@@ -31,7 +32,8 @@
         "inn": ""
       },
       "commission": null,
-      "products_count": 0
+      "products_count": 0,
+      "coupons": []
     },
     {
       "id": 21894,
@@ -46,7 +48,8 @@
         "inn": ""
       },
       "commission": null,
-      "products_count": 0
+      "products_count": 0,
+      "coupons": []
     },
     {
       "id": 36507,
@@ -61,7 +64,8 @@
         "inn": ""
       },
       "commission": null,
-      "products_count": 0
+      "products_count": 0,
+      "coupons": []
     },
     {
       "id": 26798,
@@ -76,7 +80,8 @@
         "inn": ""
       },
       "commission": null,
-      "products_count": 0
+      "products_count": 0,
+      "coupons": []
     },
     {
       "id": 19213,
@@ -91,7 +96,8 @@
         "inn": ""
       },
       "commission": null,
-      "products_count": 0
+      "products_count": 0,
+      "coupons": []
     },
     {
       "id": 37704,
@@ -106,7 +112,8 @@
         "inn": ""
       },
       "commission": null,
-      "products_count": 0
+      "products_count": 0,
+      "coupons": []
     }
   ]
 }
