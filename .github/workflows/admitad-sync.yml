@@ -5,7 +5,6 @@ on:
     - cron: '0 * * * *'
   workflow_dispatch:
 
-# Добавляем разрешения для GITHUB_TOKEN
 permissions:
   contents: write
 
@@ -24,6 +23,7 @@ jobs:
       - name: Run Admitad parser
         env:
           BASE64_HEADER: ${{ secrets.BASE64_HEADER }}
+          ADMITAD_WEBSITE_ID: ${{ secrets.ADMITAD_WEBSITE_ID }}
         run: node scripts/admitad-fetch.js
 
       - name: Commit and push if changed
