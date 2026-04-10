@@ -1,75 +1,32 @@
-name: Admitad Data Sync
+name: Sync Admitad Ads
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # Запуск каждые 6 часов
-  workflow_dispatch:       # Ручной запуск
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    - cron: '0 * * * *'   # каждый час
+  workflow_dispatch:      # ручной запуск
 
 jobs:
-  sync-admitad:
+  fetch-and-commit:
     runs-on: ubuntu-latest
-    # ⛔ ВАЖНО: Строки environment: быть НЕ ДОЛЖНО!
-    # Иначе GitHub игнорирует Repository secrets.
-
-    permissions:
-      contents: write
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 24
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: '24'   # актуальная LTS на 2026 год
 
-      # 🔍 Проверка секретов перед запуском
-      - name: 🔍 Проверка секретов
-        run: |
-          echo "Проверяю наличие секретов в Repository Secrets..."
-          
-          if [ -z "${{ secrets.ADMITAD_AUTH_HEADER }}" ]; then
-            echo "❌ ОШИБКА: ADMITAD_AUTH_HEADER не найден!"
-            echo "Создайте секрет ADMITAD_AUTH_HEADER в Settings → Secrets and variables → Actions → Repository secrets."
-            exit 1
-          fi
-          
-          if [ -z "${{ secrets.ADMITAD_CLIENT_ID }}" ]; then
-            echo "❌ ОШИБКА: ADMITAD_CLIENT_ID не найден!"
-            exit 1
-          fi
-          
-          if [ -z "${{ secrets.ADMITAD_CLIENT_SECRET }}" ]; then
-            echo "❌ ОШИБКА: ADMITAD_CLIENT_SECRET не найден!"
-            exit 1
-          fi
-          
-          if [ -z "${{ secrets.ADMITAD_WEBSITE_ID }}" ]; then
-            echo "❌ ОШИБКА: ADMITAD_WEBSITE_ID не найден!"
-            exit 1
-          fi
-          
-          echo "✅ Все секреты присутствуют!"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run Admitad Parser
+      - name: Run Admitad parser
         env:
-          ADMITAD_AUTH_HEADER: ${{ secrets.ADMITAD_AUTH_HEADER }}
           ADMITAD_CLIENT_ID: ${{ secrets.ADMITAD_CLIENT_ID }}
           ADMITAD_CLIENT_SECRET: ${{ secrets.ADMITAD_CLIENT_SECRET }}
-          ADMITAD_WEBSITE_ID: ${{ secrets.ADMITAD_WEBSITE_ID }}
-        run: node scripts/admitad-parser.js
+        run: node scripts/admitad-fetch.js
 
-      - name: Commit and push changes
+      - name: Commit and push if changed
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add public/admitad-data.json
-          git diff --staged --quiet || git commit -m "🔄 Update Admitad data [skip ci]"
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          git add data/admitad_ads.json
+          git diff --staged --quiet || git commit -m "Update Admitad ads data"
           git push
