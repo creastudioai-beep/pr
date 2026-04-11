@@ -1,6 +1,6 @@
 // scripts/admitad-fetch.js
 // ES module syntax - requires "type": "module" in package.json
-// ПАРСЕР ADMITAD: Проксирует изображения через /m/<hash>, обновляет media_map.json
+// ПАРСЕР ADMITAD: Сохраняет оригинальные URL, без проксирования и media_map
 
 import fs from 'fs/promises';
 import path from 'path';
@@ -15,7 +15,6 @@ const __dirname = path.dirname(__filename);
 const BASE64_HEADER = process.env.BASE64_HEADER;
 const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID;
 const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns coupons';
-const SITE_URL = 'https://sochiautoparts.ru';
 const MAX_DESCRIPTION_LENGTH = 200;
 const MIN_DESCRIPTION_LENGTH = 30;
 
@@ -38,51 +37,6 @@ try {
 } catch (error) {
   console.error('❌ Ошибка декодирования BASE64_HEADER:', error.message);
   process.exit(1);
-}
-
-// ============================================================
-// HASH FUNCTION (MUST MATCH WORKER)
-// ============================================================
-function generateMediaHash(url) {
-  if (!url || typeof url !== 'string') return '0';
-  let hash = 2166136261;
-  for (let i = 0; i < url.length; i++) {
-    hash ^= url.charCodeAt(i);
-    hash = (hash * 16777619) >>> 0;
-  }
-  return hash.toString(36);
-}
-
-function getProxyMediaUrl(originalUrl) {
-  if (!originalUrl) return SITE_URL + '/logo.png';
-  const hash = generateMediaHash(originalUrl);
-  return SITE_URL + '/m/' + hash;
-}
-
-// ============================================================
-// LOAD & SAVE MEDIA MAP
-// ============================================================
-async function loadExistingMediaMap(dataDir) {
-  const mediaMapPath = path.join(dataDir, 'media_map.json');
-  try {
-    const content = await fs.readFile(mediaMapPath, 'utf8');
-    const map = JSON.parse(content);
-    console.log(`📥 Загружено существующих записей в media_map: ${Object.keys(map).length}`);
-    return map;
-  } catch (e) {
-    if (e.code === 'ENOENT') {
-      console.log('📥 media_map.json не найден, создаём новый');
-      return {};
-    }
-    console.warn(`⚠️ Ошибка чтения media_map.json: ${e.message}`);
-    return {};
-  }
-}
-
-async function saveMediaMap(dataDir, mediaMap) {
-  const mediaMapPath = path.join(dataDir, 'media_map.json');
-  await fs.writeFile(mediaMapPath, JSON.stringify(mediaMap, null, 2));
-  console.log(`💾 media_map.json сохранён: ${Object.keys(mediaMap).length} записей`);
 }
 
 // ============================================================
@@ -129,9 +83,10 @@ function detectCategory(program) {
 }
 
 // ============================================================
-// IMAGE EXTRACTION & PROXY
+// IMAGE EXTRACTION - ORIGINAL URLS, ALL KEYS
 // ============================================================
-function extractAndProxyImages(program, mediaMap) {
+// FIX: Извлекает оригинальные URL и дублирует во все поля для Worker
+function extractImages(program) {
   const imageKeys = [
     'image',
     'image_url', 
@@ -145,37 +100,34 @@ function extractAndProxyImages(program, mediaMap) {
   let bestImage = null;
   let fallbackImage = null;
   
+  // Поиск лучшего изображения
   for (const key of imageKeys) {
     const value = program[key];
     if (value && typeof value === 'string' && value.trim() !== '') {
       const url = value.trim();
       if (url.startsWith('http://') || url.startsWith('https://')) {
-        const hash = generateMediaHash(url);
-        const proxyUrl = getProxyMediaUrl(url);
-        
-        // Добавляем в карту (сохраняем существующие записи)
-        if (!mediaMap[hash]) {
-          mediaMap[hash] = url;
-        }
-        
         if (!bestImage) {
-          bestImage = proxyUrl;
+          bestImage = url;
         }
         if (key === 'logo' || key === 'advertiser_logo') {
-          fallbackImage = proxyUrl;
+          fallbackImage = url;
         }
       }
     }
   }
   
+  const finalImage = bestImage || '';
+  const finalLogo = fallbackImage || bestImage || '';
+  
+  // Дублируем URL во все поля, чтобы Worker нашёл через любой ключ
   return {
-    image: bestImage || '',
-    image_url: bestImage || '',
-    logo: fallbackImage || bestImage || '',
+    image: finalImage,
+    image_url: finalImage,
+    logo: finalLogo,
     icon: program.icon || program.favicon || '',
     favicon: program.favicon || '',
-    advertiser_logo: fallbackImage || bestImage || '',
-    brand_logo: fallbackImage || bestImage || ''
+    advertiser_logo: finalLogo,
+    brand_logo: finalLogo
   };
 }
 
@@ -342,19 +294,12 @@ async function main() {
       console.warn(`⚠️ Ошибка купонов: ${e.message}`);
     }
 
-    const dataDir = path.join(__dirname, '..', 'data');
-    await fs.mkdir(dataDir, { recursive: true });
-
-    // Загружаем существующую карту медиа
-    const mediaMap = await loadExistingMediaMap(dataDir);
-    const initialMapSize = Object.keys(mediaMap).length;
-
     const advertiserCache = new Map();
     const processedPrograms = [];
     let imagesFound = 0;
     let descriptionsGenerated = 0;
 
-    console.log('🔄 Обработка программ и проксирование изображений...');
+    console.log('🔄 Обработка программ...');
     for (const prog of allPrograms) {
       let legalInfo = {
         name: prog.advertiser_name || prog.name || '',
@@ -381,8 +326,8 @@ async function main() {
       const programCoupons = allCoupons.filter(c => c.campaign?.id === prog.id);
       const category = detectCategory(prog);
       
-      // Проксирование изображений и обновление mediaMap
-      const images = extractAndProxyImages(prog, mediaMap);
+      // Извлечение изображений (оригинальные URL, все ключи)
+      const images = extractImages(prog);
       if (images.image) imagesFound++;
 
       const descriptions = generateAdDescription(prog);
@@ -393,7 +338,7 @@ async function main() {
         name: prog.name,
         slug: slugify(prog.name),
         
-        // Проксированные изображения
+        // Оригинальные изображения во всех полях
         ...images,
         
         // Описания
@@ -434,9 +379,8 @@ async function main() {
     }
 
     console.log(`✅ Обработано: ${processedPrograms.length} программ`);
-    console.log(`🖼️  Найдено и проксировано изображений: ${imagesFound}/${processedPrograms.length}`);
+    console.log(`🖼️  Найдено изображений: ${imagesFound}/${processedPrograms.length}`);
     console.log(`📝 Сгенерировано описаний: ${descriptionsGenerated}/${processedPrograms.length}`);
-    console.log(`🗺️  Добавлено записей в media_map: ${Object.keys(mediaMap).length - initialMapSize}`);
 
     // Группировка по регионам
     const REGION_GROUPS = {
@@ -481,7 +425,7 @@ async function main() {
       console.log(`  ${group.name}: ${group.count} программ`);
     }
 
-    // Сохранение файлов
+    // Сохранение ТОЛЬКО admitad_ads.json
     const outputData = {
       last_updated: new Date().toISOString(),
       website_id: WEBSITE_ID || null,
@@ -493,20 +437,21 @@ async function main() {
       categories: Object.keys(CATEGORY_KEYWORDS)
     };
 
+    const dataDir = path.join(__dirname, '..', 'data');
+    await fs.mkdir(dataDir, { recursive: true });
+    
     const adsPath = path.join(dataDir, 'admitad_ads.json');
     await fs.writeFile(adsPath, JSON.stringify(outputData, null, 2));
-    await saveMediaMap(dataDir, mediaMap);
 
-    console.log(`💾 admitad_ads.json сохранён: ${adsPath}`);
+    console.log(`💾 Файл сохранён: ${adsPath}`);
     console.log('🎉 Парсинг завершён успешно!');
     console.log('\n📋 Следующие шаги:');
-    console.log('   1. Закоммитьте оба файла в GitHub:');
-    console.log('      git add data/admitad_ads.json data/media_map.json');
-    console.log('      git commit -m "Update Admitad data with proxied images"');
+    console.log('   1. Закоммитьте файл в GitHub:');
+    console.log('      git add data/admitad_ads.json');
+    console.log('      git commit -m "Update Admitad data"');
     console.log('      git push');
     console.log('   2. Очистите кэш Worker:');
     console.log('      curl https://sochiautoparts.ru/api/cache/clear');
-    console.log('   3. Проверьте отображение рекламных блоков на сайте.');
 
   } catch (error) {
     console.error('❌ Ошибка:', error.message);
