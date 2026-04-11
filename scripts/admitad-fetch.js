@@ -1,5 +1,6 @@
 // scripts/admitad-fetch.js
 // ES module syntax - requires "type": "module" in package.json
+// ПАРСЕР ADMITAD: Сохраняет оригинальные URL, без проксирования и media_map
 
 import fs from 'fs/promises';
 import path from 'path';
@@ -82,9 +83,10 @@ function detectCategory(program) {
 }
 
 // ============================================================
-// IMAGE EXTRACTION - FIX FOR MULTIPLE KEYS
+// IMAGE EXTRACTION - ORIGINAL URLS, ALL KEYS
 // ============================================================
-function extractBestImage(program) {
+// FIX: Извлекает оригинальные URL и дублирует во все поля для Worker
+function extractImages(program) {
   const imageKeys = [
     'image',
     'image_url', 
@@ -98,6 +100,7 @@ function extractBestImage(program) {
   let bestImage = null;
   let fallbackImage = null;
   
+  // Поиск лучшего изображения
   for (const key of imageKeys) {
     const value = program[key];
     if (value && typeof value === 'string' && value.trim() !== '') {
@@ -113,11 +116,18 @@ function extractBestImage(program) {
     }
   }
   
+  const finalImage = bestImage || '';
+  const finalLogo = fallbackImage || bestImage || '';
+  
+  // Дублируем URL во все поля, чтобы Worker нашёл через любой ключ
   return {
-    image: bestImage || '',
-    logo: fallbackImage || bestImage || '',
+    image: finalImage,
+    image_url: finalImage,
+    logo: finalLogo,
     icon: program.icon || program.favicon || '',
-    favicon: program.favicon || ''
+    favicon: program.favicon || '',
+    advertiser_logo: finalLogo,
+    brand_logo: finalLogo
   };
 }
 
@@ -315,7 +325,9 @@ async function main() {
 
       const programCoupons = allCoupons.filter(c => c.campaign?.id === prog.id);
       const category = detectCategory(prog);
-      const images = extractBestImage(prog);
+      
+      // Извлечение изображений (оригинальные URL, все ключи)
+      const images = extractImages(prog);
       if (images.image) imagesFound++;
 
       const descriptions = generateAdDescription(prog);
@@ -326,14 +338,10 @@ async function main() {
         name: prog.name,
         slug: slugify(prog.name),
         
-        image: images.image,
-        image_url: images.image,
-        logo: images.logo,
-        icon: images.icon,
-        favicon: images.favicon,
-        advertiser_logo: images.logo,
-        brand_logo: images.logo,
+        // Оригинальные изображения во всех полях
+        ...images,
         
+        // Описания
         site_description: descriptions.site_description,
         advertiser_description: descriptions.advertiser_description,
         description: descriptions.description,
@@ -374,6 +382,7 @@ async function main() {
     console.log(`🖼️  Найдено изображений: ${imagesFound}/${processedPrograms.length}`);
     console.log(`📝 Сгенерировано описаний: ${descriptionsGenerated}/${processedPrograms.length}`);
 
+    // Группировка по регионам
     const REGION_GROUPS = {
       ru: { name: 'Россия', countries: ['RU'] },
       by: { name: 'Беларусь', countries: ['BY'] },
@@ -416,6 +425,7 @@ async function main() {
       console.log(`  ${group.name}: ${group.count} программ`);
     }
 
+    // Сохранение ТОЛЬКО admitad_ads.json
     const outputData = {
       last_updated: new Date().toISOString(),
       website_id: WEBSITE_ID || null,
@@ -429,11 +439,19 @@ async function main() {
 
     const dataDir = path.join(__dirname, '..', 'data');
     await fs.mkdir(dataDir, { recursive: true });
-    const outputPath = path.join(dataDir, 'admitad_ads.json');
-    await fs.writeFile(outputPath, JSON.stringify(outputData, null, 2));
+    
+    const adsPath = path.join(dataDir, 'admitad_ads.json');
+    await fs.writeFile(adsPath, JSON.stringify(outputData, null, 2));
 
-    console.log(`💾 Файл сохранён: ${outputPath}`);
+    console.log(`💾 Файл сохранён: ${adsPath}`);
     console.log('🎉 Парсинг завершён успешно!');
+    console.log('\n📋 Следующие шаги:');
+    console.log('   1. Закоммитьте файл в GitHub:');
+    console.log('      git add data/admitad_ads.json');
+    console.log('      git commit -m "Update Admitad data"');
+    console.log('      git push');
+    console.log('   2. Очистите кэш Worker:');
+    console.log('      curl https://sochiautoparts.ru/api/cache/clear');
 
   } catch (error) {
     console.error('❌ Ошибка:', error.message);
