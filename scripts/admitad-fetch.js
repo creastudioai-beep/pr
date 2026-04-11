@@ -12,15 +12,17 @@ const CONFIG = {
     REQUEST_TIMEOUT_MS: 30000,
     MAX_RETRIES: 3,
     RETRY_DELAY_MS: 1000,
-    CONCURRENT_PROGRAM_REQUESTS: 5,   // параллельных запросов для обогащения программ
-    PAGE_LIMIT: 200,                  // лимит на страницу пагинации
-    LANGUAGE: 'ru',                   // язык для категорий
+    CONCURRENT_PROGRAM_REQUESTS: 5,
+    PAGE_LIMIT: 200,
+    LANGUAGE: 'ru',
+    // Флаг: использовать API категорий (если false, всегда fallback)
+    USE_CATEGORIES_API: process.env.USE_CATEGORIES_API !== 'false', // по умолчанию true
 };
 
 // Переменные окружения
 const BASE64_HEADER = process.env.BASE64_HEADER;
 const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID;
-const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns coupons';
+let SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns coupons';
 
 if (!BASE64_HEADER) {
     console.error('❌ Отсутствует BASE64_HEADER в переменных окружения');
@@ -50,10 +52,9 @@ function slugify(text) {
         .replace(/^-|-$/g, '');
 }
 
-// Задержка для retry
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Универсальный fetch с повторными попытками и таймаутом
+// Универсальный fetch с повторными попытками
 async function fetchWithRetry(url, options, retries = CONFIG.MAX_RETRIES) {
     let lastError;
     for (let i = 0; i < retries; i++) {
@@ -62,16 +63,12 @@ async function fetchWithRetry(url, options, retries = CONFIG.MAX_RETRIES) {
             const timeoutId = setTimeout(() => controller.abort(), CONFIG.REQUEST_TIMEOUT_MS);
             const response = await fetch(url, { ...options, signal: controller.signal });
             clearTimeout(timeoutId);
-
-            // Если 429 Too Many Requests – ждём и повторяем
             if (response.status === 429) {
                 const waitTime = (i + 1) * CONFIG.RETRY_DELAY_MS;
                 console.warn(`⚠️ Rate limit (429), ждём ${waitTime}ms...`);
                 await delay(waitTime);
                 continue;
             }
-
-            // Любой ответ, даже с ошибкой, возвращаем – вызывающий код разберётся
             return response;
         } catch (error) {
             lastError = error;
@@ -84,18 +81,15 @@ async function fetchWithRetry(url, options, retries = CONFIG.MAX_RETRIES) {
     throw new Error(`Не удалось выполнить запрос после ${retries} попыток: ${lastError.message}`);
 }
 
-// Пагинированный сбор всех результатов с обработкой next
+// Пагинированный сбор результатов
 async function fetchAllPaginated(endpoint, accessToken, params = {}) {
     let allResults = [];
     let url = `${CONFIG.ADMITAD_API_BASE}/${endpoint}/?limit=${CONFIG.PAGE_LIMIT}`;
-    
-    // Добавляем дополнительные параметры
     for (const [key, value] of Object.entries(params)) {
         if (value !== undefined && value !== null && value !== '') {
             url += `&${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
         }
     }
-    
     while (url) {
         console.log(`📡 Запрос: ${url.substring(0, 100)}...`);
         const response = await fetchWithRetry(url, {
@@ -104,45 +98,61 @@ async function fetchAllPaginated(endpoint, accessToken, params = {}) {
                 'User-Agent': 'SOCHIAUTOPARTS-GitHubAction/1.0',
             },
         });
-        
         if (!response.ok) {
             const errText = await response.text();
             throw new Error(`Ошибка ${response.status} при запросе ${endpoint}: ${errText}`);
         }
-        
         const data = await response.json();
         const results = data.results || [];
         allResults.push(...results);
         url = data.next || null;
     }
-    
     console.log(`✅ Загружено ${allResults.length} записей из ${endpoint}`);
     return allResults;
 }
 
 // ======================== КАТЕГОРИИ ========================
-let globalCategoriesCache = null; // Map<id, categoryObject>
+let globalCategoriesCache = null;
+let categoriesApiAvailable = true; // флаг, что API категорий работает
 
-// Получить справочник всех категорий (один раз за сессию)
 async function fetchAllCategories(accessToken) {
+    if (!CONFIG.USE_CATEGORIES_API) {
+        console.log(`ℹ️ Использование API категорий отключено (USE_CATEGORIES_API=false)`);
+        categoriesApiAvailable = false;
+        return new Map();
+    }
     if (globalCategoriesCache) return globalCategoriesCache;
     
     console.log(`📚 Загрузка справочника категорий (язык: ${CONFIG.LANGUAGE})...`);
-    const allCategories = await fetchAllPaginated('categories', accessToken, {
-        language: CONFIG.LANGUAGE,
-    });
-    
-    const categoriesMap = new Map();
-    for (const cat of allCategories) {
-        categoriesMap.set(cat.id, cat);
+    try {
+        const allCategories = await fetchAllPaginated('categories', accessToken, {
+            language: CONFIG.LANGUAGE,
+        });
+        const categoriesMap = new Map();
+        for (const cat of allCategories) {
+            categoriesMap.set(cat.id, cat);
+        }
+        globalCategoriesCache = categoriesMap;
+        console.log(`✅ Загружено категорий: ${categoriesMap.size}`);
+        categoriesApiAvailable = true;
+        return categoriesMap;
+    } catch (error) {
+        // Ошибка 403 (insufficient_scope) или любая другая
+        if (error.message.includes('403') || error.message.includes('insufficient_scope')) {
+            console.warn(`⚠️ API категорий недоступно (не хватает scope 'public_data'). Используется fallback-детектор.`);
+        } else {
+            console.warn(`⚠️ Ошибка загрузки категорий: ${error.message}. Используется fallback.`);
+        }
+        categoriesApiAvailable = false;
+        return new Map();
     }
-    globalCategoriesCache = categoriesMap;
-    console.log(`✅ Загружено категорий: ${categoriesMap.size}`);
-    return categoriesMap;
 }
 
-// Получить категории для одной программы (через /advcampaigns/{id}/)
+// Получить категории для программы (только если API доступен)
 async function fetchProgramCategories(programId, accessToken) {
+    if (!categoriesApiAvailable || !CONFIG.USE_CATEGORIES_API) {
+        return [];
+    }
     try {
         const response = await fetchWithRetry(
             `${CONFIG.ADMITAD_API_BASE}/advcampaigns/${programId}/?language=${CONFIG.LANGUAGE}`,
@@ -153,16 +163,23 @@ async function fetchProgramCategories(programId, accessToken) {
                 },
             }
         );
-        if (!response.ok) return [];
+        if (!response.ok) {
+            if (response.status === 403) {
+                console.warn(`⚠️ Недостаточно прав для категорий программы ${programId}, переключаемся на fallback глобально.`);
+                categoriesApiAvailable = false;
+            }
+            return [];
+        }
         const data = await response.json();
         return data.categories || [];
     } catch (error) {
+        if (error.message.includes('403')) categoriesApiAvailable = false;
         console.warn(`⚠️ Не удалось получить категории для программы ${programId}: ${error.message}`);
         return [];
     }
 }
 
-// Fallback – старый детектор категорий по ключевым словам (на случай отсутствия API категорий)
+// Fallback-детектор по ключевым словам
 const CATEGORY_KEYWORDS = {
     autoparts: ['автозапчасти', 'запчасти', 'auto parts', 'автодетали'],
     autoinsurance: ['страхование', 'осаго', 'каско', 'insurance', 'автострахование'],
@@ -235,12 +252,11 @@ async function fetchAdvertiserInfo(advertiserId, accessToken) {
 
 // ======================== ОБРАБОТКА ПРОГРАММ ========================
 async function enrichProgram(program, accessToken, categoriesMap) {
-    // 1. Юридическая информация
+    // Юридическая информация
     let legalInfo = program.advertiser_legal_info || {
         name: program.advertiser_name || program.name,
         inn: program.advertiser_inn || '',
     };
-    
     if ((!legalInfo.inn || legalInfo.inn.trim() === '') && program.advertiser_id) {
         const info = await fetchAdvertiserInfo(program.advertiser_id, accessToken);
         if (info) {
@@ -251,35 +267,42 @@ async function enrichProgram(program, accessToken, categoriesMap) {
         }
     }
     
-    // 2. Разрешённые регионы
+    // Разрешённые регионы
     let allowedRegions = [];
     if (program.regions && Array.isArray(program.regions)) {
         allowedRegions = program.regions.map(r => r.region || r).filter(Boolean);
     }
     
-    // 3. Категории – получаем из API
+    // Категории
     let categoriesFromApi = [];
     let primaryCategory = { id: null, name: null };
-    try {
-        categoriesFromApi = await fetchProgramCategories(program.id, accessToken);
-        if (categoriesFromApi && categoriesFromApi.length > 0) {
-            primaryCategory = {
-                id: categoriesFromApi[0].id,
-                name: categoriesFromApi[0].name,
-            };
-        } else {
-            // Fallback на старый детектор, если API категорий не вернул данные
+    
+    if (categoriesApiAvailable && CONFIG.USE_CATEGORIES_API) {
+        try {
+            categoriesFromApi = await fetchProgramCategories(program.id, accessToken);
+            if (categoriesFromApi && categoriesFromApi.length > 0) {
+                primaryCategory = {
+                    id: categoriesFromApi[0].id,
+                    name: categoriesFromApi[0].name,
+                };
+            } else {
+                // Fallback
+                const fallbackId = detectCategoryFallback(program);
+                primaryCategory.id = fallbackId;
+                if (categoriesMap && categoriesMap.has(fallbackId)) {
+                    primaryCategory.name = categoriesMap.get(fallbackId).name;
+                } else {
+                    primaryCategory.name = fallbackId;
+                }
+            }
+        } catch (error) {
+            console.warn(`⚠️ Ошибка категорий для программы ${program.id}, fallback`);
             const fallbackId = detectCategoryFallback(program);
             primaryCategory.id = fallbackId;
-            // Попробуем найти имя в загруженном справочнике
-            if (categoriesMap && categoriesMap.has(fallbackId)) {
-                primaryCategory.name = categoriesMap.get(fallbackId).name;
-            } else {
-                primaryCategory.name = fallbackId;
-            }
+            primaryCategory.name = fallbackId;
+            categoriesFromApi = [];
         }
-    } catch (error) {
-        console.warn(`⚠️ Ошибка получения категорий для программы ${program.id}, используем fallback: ${error.message}`);
+    } else {
         const fallbackId = detectCategoryFallback(program);
         primaryCategory.id = fallbackId;
         if (categoriesMap && categoriesMap.has(fallbackId)) {
@@ -287,7 +310,6 @@ async function enrichProgram(program, accessToken, categoriesMap) {
         } else {
             primaryCategory.name = fallbackId;
         }
-        categoriesFromApi = [];
     }
     
     return {
@@ -300,7 +322,7 @@ async function enrichProgram(program, accessToken, categoriesMap) {
         site_url: program.site_url,
         category_id: primaryCategory.id,
         category_name: primaryCategory.name,
-        categories: categoriesFromApi, // полный массив категорий
+        categories: categoriesFromApi,
         advertiser_legal_info: {
             name: legalInfo.name || program.name,
             inn: legalInfo.inn || '',
@@ -338,7 +360,7 @@ function groupByRegions(programs) {
             if (hasIntersection) {
                 regionGroups[groupKey].programs.push(prog);
                 assigned = true;
-                break; // первая подходящая группа
+                break;
             }
         }
         if (!assigned) {
@@ -346,18 +368,15 @@ function groupByRegions(programs) {
         }
     }
     
-    // Удаляем дубликаты (хотя с break они уже не дублируются) и считаем количество
     for (const key of Object.keys(regionGroups)) {
         const unique = Array.from(new Map(regionGroups[key].programs.map(p => [p.id, p])).values());
         regionGroups[key].programs = unique;
         regionGroups[key].count = unique.length;
     }
-    
     return regionGroups;
 }
 
 // ======================== КУПОНЫ ========================
-// Купоны привязываются к программам после загрузки всех программ и купонов
 function attachCouponsToPrograms(programs, coupons) {
     const couponsByCampaign = new Map();
     for (const coupon of coupons) {
@@ -376,7 +395,6 @@ function attachCouponsToPrograms(programs, coupons) {
             });
         }
     }
-    
     for (const prog of programs) {
         prog.coupons = couponsByCampaign.get(prog.id) || [];
     }
@@ -390,31 +408,30 @@ async function main() {
         const accessToken = await fetchAccessToken();
         console.log('✅ Токен получен');
         
-        // 1. Загружаем все программы (с пагинацией)
+        // 1. Загружаем программы
         const campaignParams = {};
         if (WEBSITE_ID) campaignParams.website = WEBSITE_ID;
         const allProgramsRaw = await fetchAllPaginated('advcampaigns', accessToken, campaignParams);
         console.log(`📊 Получено программ (сырых): ${allProgramsRaw.length}`);
         
-        // 2. Загружаем все купоны (с пагинацией)
+        // 2. Загружаем купоны
         let allCoupons = [];
         try {
-            allCoupons = await fetchAllPaginated('coupons', accessToken, { has_affiliate_link: true, limit: 500 });
+            allCoupons = await fetchAllPaginated('coupons', accessToken, { has_affiliate_link: true });
             console.log(`🎫 Получено купонов: ${allCoupons.length}`);
         } catch (err) {
             console.warn(`⚠️ Не удалось загрузить купоны: ${err.message}`);
         }
         
-        // 3. Загружаем справочник категорий
+        // 3. Загружаем категории (если доступно)
         const categoriesMap = await fetchAllCategories(accessToken);
         
-        // 4. Обогащаем программы категориями и юридическими данными (параллельно с ограничением)
+        // 4. Обогащаем программы параллельно
         const enrichedPrograms = [];
         const chunks = [];
         for (let i = 0; i < allProgramsRaw.length; i += CONFIG.CONCURRENT_PROGRAM_REQUESTS) {
             chunks.push(allProgramsRaw.slice(i, i + CONFIG.CONCURRENT_PROGRAM_REQUESTS));
         }
-        
         let processedCount = 0;
         for (const chunk of chunks) {
             const chunkResults = await Promise.all(
@@ -430,32 +447,30 @@ async function main() {
         
         // 6. Группировка по регионам
         const regionGroups = groupByRegions(programsWithCoupons);
-        
         console.log(`📊 Группировка по регионам:`);
         for (const [key, group] of Object.entries(regionGroups)) {
             console.log(`   - ${group.name}: ${group.count} программ`);
         }
         
-        // 7. Формируем финальный JSON
+        // 7. Финальный JSON
         const outputData = {
             last_updated: new Date().toISOString(),
             website_id: WEBSITE_ID || null,
             total_programs: programsWithCoupons.length,
-            programs: programsWithCoupons,              // полный список
-            region_groups: regionGroups,                // сгруппированные по регионам
-            categories_reference: Object.fromEntries(categoriesMap), // для справки
+            programs: programsWithCoupons,
+            region_groups: regionGroups,
+            categories_reference: Object.fromEntries(categoriesMap),
+            categories_api_used: categoriesApiAvailable && CONFIG.USE_CATEGORIES_API,
         };
         
-        // 8. Сохраняем файл
+        // 8. Сохраняем
         const dataDir = path.join(__dirname, '..', 'data');
         try {
             await fs.access(dataDir);
         } catch {
             await fs.mkdir(dataDir, { recursive: true });
         }
-        
         const outputPath = path.join(dataDir, 'admitad_ads.json');
-        // Временная запись для атомарности
         const tmpPath = outputPath + '.tmp';
         await fs.writeFile(tmpPath, JSON.stringify(outputData, null, 2));
         await fs.rename(tmpPath, outputPath);
