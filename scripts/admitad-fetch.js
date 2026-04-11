@@ -1,6 +1,7 @@
 // scripts/admitad-fetch.js
 // ES module syntax - requires "type": "module" in package.json
-// ПАРСЕР ADMITAD: Сохраняет оригинальные URL, без проксирования и media_map
+// ПАРСЕР ADMITAD v3.0 - ТОЛЬКО РЕАЛЬНЫЕ ДАННЫЕ ИЗ API
+// Без выдуманных описаний. Сохраняет оригинальные URL изображений.
 
 import fs from 'fs/promises';
 import path from 'path';
@@ -15,8 +16,7 @@ const __dirname = path.dirname(__filename);
 const BASE64_HEADER = process.env.BASE64_HEADER;
 const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID;
 const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns coupons';
-const MAX_DESCRIPTION_LENGTH = 200;
-const MIN_DESCRIPTION_LENGTH = 30;
+const MAX_DESCRIPTION_LENGTH = 300;
 
 if (!BASE64_HEADER) {
   console.error('❌ Отсутствует BASE64_HEADER в переменных окружения');
@@ -40,16 +40,16 @@ try {
 }
 
 // ============================================================
-// CATEGORY KEYWORDS & MAPPING
+// CATEGORY KEYWORDS & MAPPING (только для категоризации, не для описаний)
 // ============================================================
 const CATEGORY_KEYWORDS = {
-  autoparts: ['автозапчасти', 'запчасти', 'auto parts', 'автодетали', 'запчасть', 'spare parts', 'автомагазин'],
-  autoinsurance: ['страхование', 'осаго', 'каско', 'insurance', 'автострахование', 'страховка', 'полис'],
-  tires: ['шины', 'покрышки', 'tires', 'автошины', 'резина', 'диски', 'wheels', 'колеса'],
-  checkauto: ['проверка авто', 'автокод', 'vin', 'car check', 'история авто', 'проверка vin', 'отчет'],
-  autorent: ['прокат авто', 'аренда авто', 'car rental', 'rent a car', 'каршеринг', 'аренда машины'],
-  tools: ['инструменты', 'tools', 'автоинструмент', 'гараж', 'оборудование', 'диагностика'],
-  coupons: ['купон', 'coupon', 'промокод', 'скидка', 'discount', 'акция', 'распродажа'],
+  autoparts: ['автозапчасти', 'запчасти', 'auto parts', 'автодетали', 'spare parts', 'автомагазин'],
+  autoinsurance: ['страхование', 'осаго', 'каско', 'insurance', 'автострахование', 'страховка'],
+  tires: ['шины', 'покрышки', 'tires', 'автошины', 'резина', 'диски', 'wheels'],
+  checkauto: ['проверка авто', 'автокод', 'vin', 'car check', 'история авто', 'проверка vin'],
+  autorent: ['прокат авто', 'аренда авто', 'car rental', 'rent a car', 'каршеринг'],
+  tools: ['инструменты', 'tools', 'автоинструмент', 'гараж', 'оборудование'],
+  coupons: ['купон', 'coupon', 'промокод', 'скидка', 'discount', 'акция'],
 };
 
 const CATEGORY_NAMES = {
@@ -64,7 +64,7 @@ const CATEGORY_NAMES = {
 };
 
 function detectCategory(program) {
-  const text = `${program.name} ${program.description || ''} ${program.site_description || ''}`.toLowerCase();
+  const text = `${program.name} ${program.description || ''} ${program.site_description || ''} ${program.advertiser_description || ''}`.toLowerCase();
   const priorityOrder = ['autoparts', 'autoinsurance', 'tires', 'checkauto', 'autorent', 'tools', 'coupons'];
   
   for (const catId of priorityOrder) {
@@ -73,45 +73,24 @@ function detectCategory(program) {
       return catId;
     }
   }
-  
-  const adCat = (program.category || '').toLowerCase();
-  if (adCat.includes('auto') || adCat.includes('car') || adCat.includes('vehicle')) {
-    return 'autoparts';
-  }
-  
   return 'other';
 }
 
 // ============================================================
-// IMAGE EXTRACTION - ORIGINAL URLS, ALL KEYS
+// ИЗВЛЕЧЕНИЕ ИЗОБРАЖЕНИЙ - ОРИГИНАЛЬНЫЕ URL
 // ============================================================
-// FIX: Извлекает оригинальные URL и дублирует во все поля для Worker
 function extractImages(program) {
-  const imageKeys = [
-    'image',
-    'image_url', 
-    'logo',
-    'advertiser_logo',
-    'brand_logo',
-    'icon',
-    'favicon'
-  ];
-  
+  const imageKeys = ['image', 'image_url', 'logo', 'advertiser_logo', 'brand_logo', 'icon', 'favicon'];
   let bestImage = null;
   let fallbackImage = null;
   
-  // Поиск лучшего изображения
   for (const key of imageKeys) {
     const value = program[key];
     if (value && typeof value === 'string' && value.trim() !== '') {
       const url = value.trim();
       if (url.startsWith('http://') || url.startsWith('https://')) {
-        if (!bestImage) {
-          bestImage = url;
-        }
-        if (key === 'logo' || key === 'advertiser_logo') {
-          fallbackImage = url;
-        }
+        if (!bestImage) bestImage = url;
+        if (key === 'logo' || key === 'advertiser_logo') fallbackImage = url;
       }
     }
   }
@@ -119,7 +98,7 @@ function extractImages(program) {
   const finalImage = bestImage || '';
   const finalLogo = fallbackImage || bestImage || '';
   
-  // Дублируем URL во все поля, чтобы Worker нашёл через любой ключ
+  // Дублируем во все возможные поля, чтобы Worker находил через любой ключ
   return {
     image: finalImage,
     image_url: finalImage,
@@ -132,14 +111,14 @@ function extractImages(program) {
 }
 
 // ============================================================
-// DESCRIPTION GENERATION
+// ОЧИСТКА HTML – ТОЛЬКО ДЛЯ УДАЛЕНИЯ ТЕГОВ, БЕЗ ВЫДУМЫВАНИЯ
 // ============================================================
 function cleanHTML(text) {
   if (!text || typeof text !== 'string') return '';
   return text
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<[^>]+>/g, '')
+    .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
@@ -150,39 +129,59 @@ function cleanHTML(text) {
     .trim();
 }
 
-function generateAdDescription(program) {
-  const rawDescriptions = [
-    program.site_description,
-    program.advertiser_description,
-    program.description,
-    program.short_description
+// ============================================================
+// ПОЛУЧЕНИЕ ОПИСАНИЯ – ТОЛЬКО ИЗ API, БЕЗ ГЕНЕРАЦИИ
+// ============================================================
+function getRealDescription(program) {
+  // Приоритет: site_description → advertiser_description → description → short_description
+  const sources = [
+    { field: program.site_description, name: 'site_description' },
+    { field: program.advertiser_description, name: 'advertiser_description' },
+    { field: program.description, name: 'description' },
+    { field: program.short_description, name: 'short_description' },
   ];
   
   let bestDescription = '';
+  let sourceUsed = '';
   
-  for (const desc of rawDescriptions) {
-    const cleaned = cleanHTML(desc);
-    if (cleaned.length >= MIN_DESCRIPTION_LENGTH) {
+  for (const src of sources) {
+    const cleaned = cleanHTML(src.field);
+    if (cleaned && cleaned.length > 0) {
       bestDescription = cleaned;
+      sourceUsed = src.name;
       break;
     }
   }
   
-  if (!bestDescription || bestDescription.length < MIN_DESCRIPTION_LENGTH) {
-    bestDescription = `${program.name} — ${CATEGORY_NAMES[detectCategory(program)] || 'партнерская программа'}. ` +
-                      `Выгодные предложения, скидки и акции. Переходите и узнайте подробнее!`;
+  // Если совсем нет описания – ставим пустую строку, НЕ выдумываем
+  if (!bestDescription) {
+    console.warn(`⚠️ Нет описания для программы ${program.name} (id: ${program.id})`);
+    return {
+      site_description: '',
+      advertiser_description: '',
+      description: '',
+      short_description: '',
+      ad_text: ''
+    };
   }
   
+  // Обрезаем до MAX_DESCRIPTION_LENGTH, но сохраняем смысл
+  let truncated = bestDescription;
   if (bestDescription.length > MAX_DESCRIPTION_LENGTH) {
-    const truncated = bestDescription.substring(0, MAX_DESCRIPTION_LENGTH);
+    truncated = bestDescription.substring(0, MAX_DESCRIPTION_LENGTH);
     const lastSpace = truncated.lastIndexOf(' ');
-    bestDescription = (lastSpace > 50 ? truncated.substring(0, lastSpace) : truncated) + '...';
+    if (lastSpace > 50) {
+      truncated = truncated.substring(0, lastSpace) + '...';
+    } else {
+      truncated = truncated + '...';
+    }
   }
   
   return {
-    site_description: cleanHTML(program.site_description) || '',
-    advertiser_description: cleanHTML(program.advertiser_description) || '',
-    description: cleanHTML(program.description) || '',
+    site_description: bestDescription,
+    advertiser_description: bestDescription,
+    description: bestDescription,
+    short_description: truncated.length > 120 ? truncated.substring(0, 120) + '...' : truncated,
     ad_text: bestDescription
   };
 }
@@ -195,7 +194,7 @@ function slugify(text) {
 }
 
 // ============================================================
-// API FUNCTIONS
+// API ФУНКЦИИ
 // ============================================================
 async function fetchAccessToken() {
   const params = new URLSearchParams();
@@ -209,7 +208,7 @@ async function fetchAccessToken() {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'SOCHIAUTOPARTS-Parser/2.0',
+      'User-Agent': 'SOCHIAUTOPARTS-Parser/3.0',
     },
     body: params.toString(),
   });
@@ -229,7 +228,7 @@ async function fetchAdvertiserInfo(advertiserId, accessToken) {
     const response = await fetch(`https://api.admitad.com/advertiser/${advertiserId}/info/`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
-        'User-Agent': 'SOCHIAUTOPARTS-Parser/2.0',
+        'User-Agent': 'SOCHIAUTOPARTS-Parser/3.0',
       },
     });
     if (!response.ok) return null;
@@ -244,7 +243,7 @@ async function fetchAdvertiserInfo(advertiserId, accessToken) {
 }
 
 // ============================================================
-// MAIN PROCESSING
+// ОСНОВНАЯ ЛОГИКА
 // ============================================================
 async function main() {
   try {
@@ -261,7 +260,7 @@ async function main() {
     const campaignsResponse = await fetch(campaignsUrl, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
-        'User-Agent': 'SOCHIAUTOPARTS-Parser/2.0',
+        'User-Agent': 'SOCHIAUTOPARTS-Parser/3.0',
       },
     });
 
@@ -281,7 +280,7 @@ async function main() {
         {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
-            'User-Agent': 'SOCHIAUTOPARTS-Parser/2.0',
+            'User-Agent': 'SOCHIAUTOPARTS-Parser/3.0',
           },
         }
       );
@@ -297,9 +296,9 @@ async function main() {
     const advertiserCache = new Map();
     const processedPrograms = [];
     let imagesFound = 0;
-    let descriptionsGenerated = 0;
+    let descriptionsFound = 0;
 
-    console.log('🔄 Обработка программ...');
+    console.log('🔄 Обработка программ (только реальные данные из API)...');
     for (const prog of allPrograms) {
       let legalInfo = {
         name: prog.advertiser_name || prog.name || '',
@@ -326,25 +325,25 @@ async function main() {
       const programCoupons = allCoupons.filter(c => c.campaign?.id === prog.id);
       const category = detectCategory(prog);
       
-      // Извлечение изображений (оригинальные URL, все ключи)
       const images = extractImages(prog);
       if (images.image) imagesFound++;
 
-      const descriptions = generateAdDescription(prog);
-      if (descriptions.ad_text) descriptionsGenerated++;
+      const descriptions = getRealDescription(prog);
+      if (descriptions.site_description) descriptionsFound++;
 
       processedPrograms.push({
         id: prog.id,
         name: prog.name,
         slug: slugify(prog.name),
         
-        // Оригинальные изображения во всех полях
+        // Оригинальные изображения (все поля)
         ...images,
         
-        // Описания
+        // Описания – ТОЛЬКО реальные данные из API
         site_description: descriptions.site_description,
         advertiser_description: descriptions.advertiser_description,
         description: descriptions.description,
+        short_description: descriptions.short_description,
         ad_text: descriptions.ad_text,
         
         goto_link: prog.goto_link || prog.site_url || '',
@@ -380,7 +379,7 @@ async function main() {
 
     console.log(`✅ Обработано: ${processedPrograms.length} программ`);
     console.log(`🖼️  Найдено изображений: ${imagesFound}/${processedPrograms.length}`);
-    console.log(`📝 Сгенерировано описаний: ${descriptionsGenerated}/${processedPrograms.length}`);
+    console.log(`📝 Найдено описаний: ${descriptionsFound}/${processedPrograms.length}`);
 
     // Группировка по регионам
     const REGION_GROUPS = {
@@ -392,11 +391,7 @@ async function main() {
 
     const regionGroups = {};
     for (const key of Object.keys(REGION_GROUPS)) {
-      regionGroups[key] = {
-        id: key,
-        name: REGION_GROUPS[key].name,
-        programs: []
-      };
+      regionGroups[key] = { id: key, name: REGION_GROUPS[key].name, programs: [] };
     }
 
     for (const prog of processedPrograms) {
@@ -425,13 +420,13 @@ async function main() {
       console.log(`  ${group.name}: ${group.count} программ`);
     }
 
-    // Сохранение ТОЛЬКО admitad_ads.json
+    // Сохраняем JSON
     const outputData = {
       last_updated: new Date().toISOString(),
       website_id: WEBSITE_ID || null,
       total_programs: processedPrograms.length,
       images_found: imagesFound,
-      descriptions_generated: descriptionsGenerated,
+      descriptions_found: descriptionsFound,
       programs: processedPrograms,
       region_groups: regionGroups,
       categories: Object.keys(CATEGORY_KEYWORDS)
@@ -448,7 +443,7 @@ async function main() {
     console.log('\n📋 Следующие шаги:');
     console.log('   1. Закоммитьте файл в GitHub:');
     console.log('      git add data/admitad_ads.json');
-    console.log('      git commit -m "Update Admitad data"');
+    console.log('      git commit -m "Update Admitad data with real descriptions"');
     console.log('      git push');
     console.log('   2. Очистите кэш Worker:');
     console.log('      curl https://sochiautoparts.ru/api/cache/clear');
