@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-11T23:30:08.584Z",
+  "last_updated": "2026-04-12T02:11:25.445Z",
   "website_id": "2929853",
   "total_programs": 15,
   "images_found": 15,
@@ -63,7 +63,7 @@
       },
       "commission": null,
       "rating": "2.2",
-      "epc": 223,
+      "epc": 233,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -3767,7 +3767,7 @@
           },
           "commission": null,
           "rating": "2.2",
-          "epc": 223,
+          "epc": 233,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
