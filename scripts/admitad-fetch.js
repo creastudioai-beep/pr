@@ -1,6 +1,5 @@
 // scripts/admitad-fetch.js
-// Использует эндпоинт Teleport для получения goto_link
-
+// Исправленная версия: получение goto_link через корректный эндпоинт deeplink_generator
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -13,10 +12,11 @@ const __dirname = path.dirname(__filename);
 // ============================================================
 const BASE64_HEADER = process.env.BASE64_HEADER;
 const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID; // 2929853
-const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns coupons';
+// Добавляем необходимые scope для доступа к deeplink_generator
+const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns coupons deeplink_generator';
 const MAX_DESCRIPTION_LENGTH = 200;
 const MIN_DESCRIPTION_LENGTH = 30;
-const TELEPORT_DELAY_MS = 100;
+const API_DELAY_MS = 150; // Задержка между запросами к API
 
 if (!BASE64_HEADER) {
   console.error('❌ Отсутствует BASE64_HEADER в переменных окружения');
@@ -41,7 +41,7 @@ try {
 }
 
 // ============================================================
-// CATEGORY KEYWORDS & MAPPING
+// CATEGORY KEYWORDS & MAPPING (как в оригинале)
 // ============================================================
 const CATEGORY_KEYWORDS = {
   autoparts: ['автозапчасти', 'запчасти', 'auto parts', 'автодетали', 'spare parts', 'автомагазин'],
@@ -142,10 +142,11 @@ async function fetchAdvertiserInfo(advertiserId, token) {
 }
 
 // ============================================================
-// ✅ ПРАВИЛЬНЫЙ МЕТОД: Teleport API
+// ✅ ИСПРАВЛЕННАЯ ФУНКЦИЯ: Deeplink Generator
 // ============================================================
-async function fetchTeleportLink(websiteId, campaignId, accessToken) {
-  const url = `https://api.admitad.com/teleport/advcampaign/${campaignId}/?website=${websiteId}`;
+async function fetchGotoLink(websiteId, campaignId, accessToken) {
+  // Формируем URL для генератора deeplink согласно документации
+  const url = `https://api.admitad.com/deeplink/${websiteId}/advcampaign/${campaignId}/`;
   try {
     const response = await fetch(url, {
       headers: {
@@ -154,18 +155,18 @@ async function fetchTeleportLink(websiteId, campaignId, accessToken) {
       }
     });
     if (!response.ok) {
-      console.warn(`⚠️ Teleport вернул ${response.status} для кампании ${campaignId}`);
+      console.warn(`⚠️ Deeplink генератор вернул ${response.status} для кампании ${campaignId}`);
       return '';
     }
     const data = await response.json();
-    // Ответ содержит поле "link"
-    if (data && data.link) {
-      return data.link;
+    // Ответ от API — это массив, содержащий объекты со сгенерированными ссылками
+    if (Array.isArray(data) && data.length > 0 && data[0].link) {
+      return data[0].link;
     }
-    console.warn(`⚠️ Неожиданный ответ Teleport для ${campaignId}:`, JSON.stringify(data).substring(0, 200));
+    console.warn(`⚠️ Неожиданный ответ от deeplink генератора для ${campaignId}:`, JSON.stringify(data).substring(0, 200));
     return '';
   } catch (err) {
-    console.warn(`⚠️ Ошибка Teleport для ${campaignId}: ${err.message}`);
+    console.warn(`⚠️ Ошибка при запросе к deeplink генератору для ${campaignId}: ${err.message}`);
     return '';
   }
 }
@@ -188,7 +189,7 @@ async function main() {
     const allPrograms = campaignsData.results || [];
     console.log(`📊 Получено программ: ${allPrograms.length}`);
 
-    // Загрузка купонов
+    // Загрузка купонов (оставляем как есть)
     console.log('🎫 Загрузка купонов...');
     let allCoupons = [];
     try {
@@ -206,7 +207,7 @@ async function main() {
     const processedPrograms = [];
     let imagesFound = 0, descriptionsGenerated = 0, gotoLinksFound = 0;
 
-    console.log('🔄 Обработка программ и получение goto_link через Teleport...');
+    console.log('🔄 Обработка программ и получение goto_link через Deeplink Generator...');
     for (let i = 0; i < allPrograms.length; i++) {
       const prog = allPrograms[i];
       
@@ -227,12 +228,12 @@ async function main() {
       const descriptions = generateAdDescription(prog);
       if (descriptions.ad_text) descriptionsGenerated++;
 
-      // Получение партнёрской ссылки через Teleport
-      console.log(`🔗 Teleport для ${prog.id} (${prog.name})...`);
-      const teleportLink = await fetchTeleportLink(WEBSITE_ID, prog.id, accessToken);
-      if (teleportLink) {
+      // Получение партнёрской ссылки через Deeplink Generator
+      console.log(`🔗 Deeplink Generator для ${prog.id} (${prog.name})...`);
+      const gotoLink = await fetchGotoLink(WEBSITE_ID, prog.id, accessToken);
+      if (gotoLink) {
         gotoLinksFound++;
-        console.log(`   ✅ Ссылка: ${teleportLink.substring(0, 80)}...`);
+        console.log(`   ✅ Ссылка получена: ${gotoLink.substring(0, 80)}...`);
       } else {
         console.log(`   ❌ Ссылка не получена`);
       }
@@ -243,7 +244,7 @@ async function main() {
         slug: slugify(prog.name),
         ...images,
         ...descriptions,
-        goto_link: teleportLink,
+        goto_link: gotoLink,
         site_url: prog.site_url || '',
         category,
         category_name: CATEGORY_NAMES[category] || 'Другое',
@@ -266,7 +267,8 @@ async function main() {
         }))
       });
 
-      await new Promise(resolve => setTimeout(resolve, TELEPORT_DELAY_MS));
+      // Небольшая задержка, чтобы не превысить лимиты API
+      await new Promise(resolve => setTimeout(resolve, API_DELAY_MS));
     }
 
     console.log(`✅ Обработано: ${processedPrograms.length} программ`);
