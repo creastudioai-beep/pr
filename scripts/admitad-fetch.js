@@ -1,6 +1,6 @@
 // scripts/admitad-fetch.js
 // ES module syntax - requires "type": "module" in package.json
-// ПАРСЕР ADMITAD: Получает goto_link через эндпоинт /offers/
+// ПАРСЕР ADMITAD: получает goto_link через отдельный запрос /deeplink/
 
 import fs from 'fs/promises';
 import path from 'path';
@@ -17,6 +17,7 @@ const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID; // 2929853
 const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns coupons';
 const MAX_DESCRIPTION_LENGTH = 200;
 const MIN_DESCRIPTION_LENGTH = 30;
+const DEEPLINK_DELAY_MS = 100; // задержка между запросами deeplink
 
 if (!BASE64_HEADER) {
   console.error('❌ Отсутствует BASE64_HEADER в переменных окружения');
@@ -24,7 +25,8 @@ if (!BASE64_HEADER) {
 }
 
 if (!WEBSITE_ID) {
-  console.warn('⚠️ ADMITAD_WEBSITE_ID не задан, goto_link может отсутствовать');
+  console.error('❌ Отсутствует ADMITAD_WEBSITE_ID в переменных окружения');
+  process.exit(1);
 }
 
 // Декодируем Base64
@@ -244,49 +246,61 @@ async function fetchAdvertiserInfo(advertiserId, accessToken) {
   }
 }
 
+// Генерация партнёрской ссылки через /deeplink/
+async function fetchGotoLink(websiteId, campaignId, accessToken) {
+  try {
+    const url = `https://api.admitad.com/deeplink/${websiteId}/advcampaign/${campaignId}/`;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'User-Agent': 'SOCHIAUTOPARTS-Parser/2.0',
+      },
+    });
+    if (!response.ok) {
+      console.warn(`⚠️ Не удалось получить deeplink для кампании ${campaignId}: ${response.status}`);
+      return '';
+    }
+    const data = await response.json();
+    // Ответ обычно массив с объектом, содержащим поле "link"
+    if (Array.isArray(data) && data.length > 0 && data[0].link) {
+      return data[0].link;
+    }
+    if (data.link) return data.link;
+    return '';
+  } catch (err) {
+    console.warn(`⚠️ Ошибка при получении deeplink для кампании ${campaignId}: ${err.message}`);
+    return '';
+  }
+}
+
 // ============================================================
-// MAIN PROCESSING - ИСПОЛЬЗУЕМ /offers/ ВМЕСТО /advcampaigns/
+// MAIN PROCESSING
 // ============================================================
 async function main() {
   try {
     const accessToken = await fetchAccessToken();
 
-    // ✅ ПРАВИЛЬНЫЙ ЭНДПОИНТ: /offers/ с website и полем gotolink
-    let offersUrl = `https://api.admitad.com/offers/?limit=200&fields=id,name,site_url,gotolink,description,commission,rating,epc,cookie_lifetime,image,logo,advertiser_name,regions`;
-    
-    if (WEBSITE_ID) {
-      offersUrl += `&website=${WEBSITE_ID}`;
-      console.log(`📡 Загрузка офферов для площадки ${WEBSITE_ID}...`);
-    } else {
-      console.log('📡 Загрузка офферов (без website_id, goto_link может не быть)...');
-    }
+    // Загружаем список программ через advcampaigns с website
+    let campaignsUrl = `https://api.admitad.com/advcampaigns/?limit=200&fields=id,name,site_url,description,commission,rating,epc,cookie_lifetime,image,logo,advertiser_name,regions`;
+    campaignsUrl += `&website=${WEBSITE_ID}`;
+    console.log(`📡 Загрузка программ для площадки ${WEBSITE_ID}...`);
 
-    const offersResponse = await fetch(offersUrl, {
+    const campaignsResponse = await fetch(campaignsUrl, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'User-Agent': 'SOCHIAUTOPARTS-Parser/2.0',
       },
     });
 
-    if (!offersResponse.ok) {
-      throw new Error(`Ошибка загрузки офферов: ${offersResponse.status}`);
+    if (!campaignsResponse.ok) {
+      throw new Error(`Ошибка загрузки программ: ${campaignsResponse.status}`);
     }
 
-    const offersData = await offersResponse.json();
-    const allOffers = offersData.results || [];
-    console.log(`📊 Получено офферов: ${allOffers.length}`);
+    const campaignsData = await campaignsResponse.json();
+    const allPrograms = campaignsData.results || [];
+    console.log(`📊 Получено программ: ${allPrograms.length}`);
 
-    // Лог первого оффера для проверки gotolink
-    if (allOffers.length > 0) {
-      console.log('🔍 Пример первого оффера:', JSON.stringify({
-        id: allOffers[0].id,
-        name: allOffers[0].name,
-        has_gotolink: !!allOffers[0].gotolink,
-        gotolink_preview: allOffers[0].gotolink ? allOffers[0].gotolink.substring(0, 80) : 'ОТСУТСТВУЕТ'
-      }, null, 2));
-    }
-
-    // Загрузка купонов (оставляем как есть)
+    // Загрузка купонов
     console.log('🎫 Загрузка купонов...');
     let allCoupons = [];
     try {
@@ -314,47 +328,59 @@ async function main() {
     let descriptionsGenerated = 0;
     let gotoLinksFound = 0;
 
-    console.log('🔄 Обработка офферов...');
-    for (const offer of allOffers) {
+    console.log('🔄 Обработка программ и получение goto_link...');
+    
+    for (let i = 0; i < allPrograms.length; i++) {
+      const prog = allPrograms[i];
+      
+      // Получаем юридическую информацию
       let legalInfo = {
-        name: offer.advertiser_name || offer.name || '',
-        inn: offer.advertiser_inn || ''
+        name: prog.advertiser_name || prog.name || '',
+        inn: prog.advertiser_inn || ''
       };
 
-      if (!legalInfo.inn && offer.advertiser_id) {
-        if (!advertiserCache.has(offer.advertiser_id)) {
-          const info = await fetchAdvertiserInfo(offer.advertiser_id, accessToken);
-          advertiserCache.set(offer.advertiser_id, info);
+      if (!legalInfo.inn && prog.advertiser_id) {
+        if (!advertiserCache.has(prog.advertiser_id)) {
+          const info = await fetchAdvertiserInfo(prog.advertiser_id, accessToken);
+          advertiserCache.set(prog.advertiser_id, info);
         }
-        const info = advertiserCache.get(offer.advertiser_id);
+        const info = advertiserCache.get(prog.advertiser_id);
         if (info) {
           legalInfo.name = legalInfo.name || info.name;
           legalInfo.inn = info.inn || legalInfo.inn;
         }
       }
 
+      // Регионы
       let allowedRegions = [];
-      if (offer.regions && Array.isArray(offer.regions)) {
-        allowedRegions = offer.regions.map(r => r.region || r).filter(Boolean);
+      if (prog.regions && Array.isArray(prog.regions)) {
+        allowedRegions = prog.regions.map(r => r.region || r).filter(Boolean);
       }
 
-      const programCoupons = allCoupons.filter(c => c.campaign?.id === offer.id);
-      const category = detectCategory(offer);
+      // Купоны для этой программы
+      const programCoupons = allCoupons.filter(c => c.campaign?.id === prog.id);
+      const category = detectCategory(prog);
       
-      const images = extractImages(offer);
+      const images = extractImages(prog);
       if (images.image) imagesFound++;
 
-      const descriptions = generateAdDescription(offer);
+      const descriptions = generateAdDescription(prog);
       if (descriptions.ad_text) descriptionsGenerated++;
 
-      // ✅ gotolink - это и есть партнёрская ссылка
-      const finalGotoLink = offer.gotolink || '';
-      if (finalGotoLink) gotoLinksFound++;
+      // Получаем goto_link через отдельный запрос
+      console.log(`🔗 Запрос deeplink для программы ${prog.id} (${prog.name})...`);
+      const gotoLink = await fetchGotoLink(WEBSITE_ID, prog.id, accessToken);
+      if (gotoLink) gotoLinksFound++;
+      
+      // Небольшая задержка, чтобы не превысить лимиты API
+      if (i < allPrograms.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, DEEPLINK_DELAY_MS));
+      }
 
       processedPrograms.push({
-        id: offer.id,
-        name: offer.name,
-        slug: slugify(offer.name),
+        id: prog.id,
+        name: prog.name,
+        slug: slugify(prog.name),
         
         ...images,
         
@@ -363,8 +389,8 @@ async function main() {
         description: descriptions.description,
         ad_text: descriptions.ad_text,
         
-        goto_link: finalGotoLink,
-        site_url: offer.site_url || '',
+        goto_link: gotoLink,
+        site_url: prog.site_url || '',
         
         category: category,
         category_name: CATEGORY_NAMES[category] || 'Другое',
@@ -374,11 +400,11 @@ async function main() {
           inn: legalInfo.inn
         },
         
-        commission: offer.commission || null,
-        rating: offer.rating || 0,
-        epc: offer.epc || 0,
-        products_count: offer.products_count || 0,
-        cookie_lifetime: offer.cookie_lifetime || 30,
+        commission: prog.commission || null,
+        rating: prog.rating || 0,
+        epc: prog.epc || 0,
+        products_count: prog.products_count || 0,
+        cookie_lifetime: prog.cookie_lifetime || 30,
         allowed_regions: allowedRegions,
         
         coupons: programCoupons.slice(0, 5).map(c => ({
@@ -399,7 +425,7 @@ async function main() {
     console.log(`📝 Сгенерировано описаний: ${descriptionsGenerated}/${processedPrograms.length}`);
     console.log(`🔗 Получено goto_link: ${gotoLinksFound}/${processedPrograms.length}`);
 
-    // Группировка по регионам (как в оригинале)
+    // Группировка по регионам
     const REGION_GROUPS = {
       ru: { name: 'Россия', countries: ['RU'] },
       by: { name: 'Беларусь', countries: ['BY'] },
@@ -466,7 +492,7 @@ async function main() {
     console.log('\n📋 Следующие шаги:');
     console.log('   1. Закоммитьте файл в GitHub:');
     console.log('      git add data/admitad_ads.json');
-    console.log('      git commit -m "Update Admitad data with goto_link from /offers/"');
+    console.log('      git commit -m "Update Admitad data with deeplink goto_link"');
     console.log('      git push');
     console.log('   2. Очистите кэш Worker:');
     console.log('      curl https://sochiautoparts.ru/api/cache/clear');
