@@ -1,6 +1,6 @@
 // scripts/admitad-fetch.js
 // ES module syntax - requires "type": "module" in package.json
-// ПАРСЕР ADMITAD: Сохраняет партнёрские ссылки (goto_link) и оригинальные URL
+// ПАРСЕР ADMITAD: Получает goto_link через эндпоинт /offers/
 
 import fs from 'fs/promises';
 import path from 'path';
@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 // CONFIGURATION
 // ============================================================
 const BASE64_HEADER = process.env.BASE64_HEADER;
-const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID; // Ваш ID: 2929853
+const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID; // 2929853
 const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns coupons';
 const MAX_DESCRIPTION_LENGTH = 200;
 const MIN_DESCRIPTION_LENGTH = 30;
@@ -87,7 +87,7 @@ function detectCategory(program) {
 }
 
 // ============================================================
-// IMAGE EXTRACTION - ORIGINAL URLS, ALL KEYS
+// IMAGE EXTRACTION
 // ============================================================
 function extractImages(program) {
   const imageKeys = [
@@ -245,47 +245,48 @@ async function fetchAdvertiserInfo(advertiserId, accessToken) {
 }
 
 // ============================================================
-// MAIN PROCESSING
+// MAIN PROCESSING - ИСПОЛЬЗУЕМ /offers/ ВМЕСТО /advcampaigns/
 // ============================================================
 async function main() {
   try {
     const accessToken = await fetchAccessToken();
 
-    // ✅ Исправлено: добавлен fields с goto_link
-    let campaignsUrl = `https://api.admitad.com/advcampaigns/?limit=200&fields=id,name,site_url,goto_link,description,commission,rating,epc,cookie_lifetime,image,logo,advertiser_name,regions`;
+    // ✅ ПРАВИЛЬНЫЙ ЭНДПОИНТ: /offers/ с website и полем gotolink
+    let offersUrl = `https://api.admitad.com/offers/?limit=200&fields=id,name,site_url,gotolink,description,commission,rating,epc,cookie_lifetime,image,logo,advertiser_name,regions`;
     
     if (WEBSITE_ID) {
-      campaignsUrl += `&website=${WEBSITE_ID}`;
-      console.log(`📡 Загрузка программ для площадки ${WEBSITE_ID}...`);
+      offersUrl += `&website=${WEBSITE_ID}`;
+      console.log(`📡 Загрузка офферов для площадки ${WEBSITE_ID}...`);
     } else {
-      console.log('📡 Загрузка всех доступных программ (без website_id)...');
+      console.log('📡 Загрузка офферов (без website_id, goto_link может не быть)...');
     }
 
-    const campaignsResponse = await fetch(campaignsUrl, {
+    const offersResponse = await fetch(offersUrl, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'User-Agent': 'SOCHIAUTOPARTS-Parser/2.0',
       },
     });
 
-    if (!campaignsResponse.ok) {
-      throw new Error(`Ошибка загрузки программ: ${campaignsResponse.status}`);
+    if (!offersResponse.ok) {
+      throw new Error(`Ошибка загрузки офферов: ${offersResponse.status}`);
     }
 
-    const campaignsData = await campaignsResponse.json();
-    const allPrograms = campaignsData.results || [];
-    console.log(`📊 Получено программ: ${allPrograms.length}`);
+    const offersData = await offersResponse.json();
+    const allOffers = offersData.results || [];
+    console.log(`📊 Получено офферов: ${allOffers.length}`);
 
-    // Лог первого объекта для проверки наличия goto_link
-    if (allPrograms.length > 0) {
-      console.log('🔍 Пример первой программы:', JSON.stringify({
-        id: allPrograms[0].id,
-        name: allPrograms[0].name,
-        has_goto_link: !!allPrograms[0].goto_link,
-        goto_link_preview: allPrograms[0].goto_link ? allPrograms[0].goto_link.substring(0, 80) : 'ОТСУТСТВУЕТ'
+    // Лог первого оффера для проверки gotolink
+    if (allOffers.length > 0) {
+      console.log('🔍 Пример первого оффера:', JSON.stringify({
+        id: allOffers[0].id,
+        name: allOffers[0].name,
+        has_gotolink: !!allOffers[0].gotolink,
+        gotolink_preview: allOffers[0].gotolink ? allOffers[0].gotolink.substring(0, 80) : 'ОТСУТСТВУЕТ'
       }, null, 2));
     }
 
+    // Загрузка купонов (оставляем как есть)
     console.log('🎫 Загрузка купонов...');
     let allCoupons = [];
     try {
@@ -313,19 +314,19 @@ async function main() {
     let descriptionsGenerated = 0;
     let gotoLinksFound = 0;
 
-    console.log('🔄 Обработка программ...');
-    for (const prog of allPrograms) {
+    console.log('🔄 Обработка офферов...');
+    for (const offer of allOffers) {
       let legalInfo = {
-        name: prog.advertiser_name || prog.name || '',
-        inn: prog.advertiser_inn || ''
+        name: offer.advertiser_name || offer.name || '',
+        inn: offer.advertiser_inn || ''
       };
 
-      if (!legalInfo.inn && prog.advertiser_id) {
-        if (!advertiserCache.has(prog.advertiser_id)) {
-          const info = await fetchAdvertiserInfo(prog.advertiser_id, accessToken);
-          advertiserCache.set(prog.advertiser_id, info);
+      if (!legalInfo.inn && offer.advertiser_id) {
+        if (!advertiserCache.has(offer.advertiser_id)) {
+          const info = await fetchAdvertiserInfo(offer.advertiser_id, accessToken);
+          advertiserCache.set(offer.advertiser_id, info);
         }
-        const info = advertiserCache.get(prog.advertiser_id);
+        const info = advertiserCache.get(offer.advertiser_id);
         if (info) {
           legalInfo.name = legalInfo.name || info.name;
           legalInfo.inn = info.inn || legalInfo.inn;
@@ -333,27 +334,27 @@ async function main() {
       }
 
       let allowedRegions = [];
-      if (prog.regions && Array.isArray(prog.regions)) {
-        allowedRegions = prog.regions.map(r => r.region || r).filter(Boolean);
+      if (offer.regions && Array.isArray(offer.regions)) {
+        allowedRegions = offer.regions.map(r => r.region || r).filter(Boolean);
       }
 
-      const programCoupons = allCoupons.filter(c => c.campaign?.id === prog.id);
-      const category = detectCategory(prog);
+      const programCoupons = allCoupons.filter(c => c.campaign?.id === offer.id);
+      const category = detectCategory(offer);
       
-      const images = extractImages(prog);
+      const images = extractImages(offer);
       if (images.image) imagesFound++;
 
-      const descriptions = generateAdDescription(prog);
+      const descriptions = generateAdDescription(offer);
       if (descriptions.ad_text) descriptionsGenerated++;
 
-      // Используем goto_link, если есть, иначе site_url
-      const finalGotoLink = prog.goto_link || '';
+      // ✅ gotolink - это и есть партнёрская ссылка
+      const finalGotoLink = offer.gotolink || '';
       if (finalGotoLink) gotoLinksFound++;
 
       processedPrograms.push({
-        id: prog.id,
-        name: prog.name,
-        slug: slugify(prog.name),
+        id: offer.id,
+        name: offer.name,
+        slug: slugify(offer.name),
         
         ...images,
         
@@ -362,9 +363,8 @@ async function main() {
         description: descriptions.description,
         ad_text: descriptions.ad_text,
         
-        // ✅ Партнёрская ссылка (goto_link) или прямая ссылка как fallback
         goto_link: finalGotoLink,
-        site_url: prog.site_url || '',
+        site_url: offer.site_url || '',
         
         category: category,
         category_name: CATEGORY_NAMES[category] || 'Другое',
@@ -374,11 +374,11 @@ async function main() {
           inn: legalInfo.inn
         },
         
-        commission: prog.commission || null,
-        rating: prog.rating || 0,
-        epc: prog.epc || 0,
-        products_count: prog.products_count || 0,
-        cookie_lifetime: prog.cookie_lifetime || 30,
+        commission: offer.commission || null,
+        rating: offer.rating || 0,
+        epc: offer.epc || 0,
+        products_count: offer.products_count || 0,
+        cookie_lifetime: offer.cookie_lifetime || 30,
         allowed_regions: allowedRegions,
         
         coupons: programCoupons.slice(0, 5).map(c => ({
@@ -399,7 +399,7 @@ async function main() {
     console.log(`📝 Сгенерировано описаний: ${descriptionsGenerated}/${processedPrograms.length}`);
     console.log(`🔗 Получено goto_link: ${gotoLinksFound}/${processedPrograms.length}`);
 
-    // Группировка по регионам
+    // Группировка по регионам (как в оригинале)
     const REGION_GROUPS = {
       ru: { name: 'Россия', countries: ['RU'] },
       by: { name: 'Беларусь', countries: ['BY'] },
@@ -466,7 +466,7 @@ async function main() {
     console.log('\n📋 Следующие шаги:');
     console.log('   1. Закоммитьте файл в GitHub:');
     console.log('      git add data/admitad_ads.json');
-    console.log('      git commit -m "Update Admitad data with goto_link"');
+    console.log('      git commit -m "Update Admitad data with goto_link from /offers/"');
     console.log('      git push');
     console.log('   2. Очистите кэш Worker:');
     console.log('      curl https://sochiautoparts.ru/api/cache/clear');
