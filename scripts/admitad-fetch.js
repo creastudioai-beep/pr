@@ -1,6 +1,6 @@
 // scripts/admitad-fetch.js
 // ES module syntax - requires "type": "module" in package.json
-// ПАРСЕР ADMITAD: Сохраняет оригинальные URL, без проксирования и media_map
+// ПАРСЕР ADMITAD: Сохраняет партнёрские ссылки (goto_link) и оригинальные URL
 
 import fs from 'fs/promises';
 import path from 'path';
@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 // CONFIGURATION
 // ============================================================
 const BASE64_HEADER = process.env.BASE64_HEADER;
-const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID;
+const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID; // Ваш ID: 2929853
 const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns coupons';
 const MAX_DESCRIPTION_LENGTH = 200;
 const MIN_DESCRIPTION_LENGTH = 30;
@@ -21,6 +21,10 @@ const MIN_DESCRIPTION_LENGTH = 30;
 if (!BASE64_HEADER) {
   console.error('❌ Отсутствует BASE64_HEADER в переменных окружения');
   process.exit(1);
+}
+
+if (!WEBSITE_ID) {
+  console.warn('⚠️ ADMITAD_WEBSITE_ID не задан, goto_link может отсутствовать');
 }
 
 // Декодируем Base64
@@ -85,7 +89,6 @@ function detectCategory(program) {
 // ============================================================
 // IMAGE EXTRACTION - ORIGINAL URLS, ALL KEYS
 // ============================================================
-// FIX: Извлекает оригинальные URL и дублирует во все поля для Worker
 function extractImages(program) {
   const imageKeys = [
     'image',
@@ -100,7 +103,6 @@ function extractImages(program) {
   let bestImage = null;
   let fallbackImage = null;
   
-  // Поиск лучшего изображения
   for (const key of imageKeys) {
     const value = program[key];
     if (value && typeof value === 'string' && value.trim() !== '') {
@@ -119,7 +121,6 @@ function extractImages(program) {
   const finalImage = bestImage || '';
   const finalLogo = fallbackImage || bestImage || '';
   
-  // Дублируем URL во все поля, чтобы Worker нашёл через любой ключ
   return {
     image: finalImage,
     image_url: finalImage,
@@ -250,12 +251,14 @@ async function main() {
   try {
     const accessToken = await fetchAccessToken();
 
-    let campaignsUrl = `https://api.admitad.com/advcampaigns/?limit=200`;
+    // ✅ Исправлено: добавлен fields с goto_link
+    let campaignsUrl = `https://api.admitad.com/advcampaigns/?limit=200&fields=id,name,site_url,goto_link,description,commission,rating,epc,cookie_lifetime,image,logo,advertiser_name,regions`;
+    
     if (WEBSITE_ID) {
       campaignsUrl += `&website=${WEBSITE_ID}`;
       console.log(`📡 Загрузка программ для площадки ${WEBSITE_ID}...`);
     } else {
-      console.log('📡 Загрузка всех доступных программ...');
+      console.log('📡 Загрузка всех доступных программ (без website_id)...');
     }
 
     const campaignsResponse = await fetch(campaignsUrl, {
@@ -272,6 +275,16 @@ async function main() {
     const campaignsData = await campaignsResponse.json();
     const allPrograms = campaignsData.results || [];
     console.log(`📊 Получено программ: ${allPrograms.length}`);
+
+    // Лог первого объекта для проверки наличия goto_link
+    if (allPrograms.length > 0) {
+      console.log('🔍 Пример первой программы:', JSON.stringify({
+        id: allPrograms[0].id,
+        name: allPrograms[0].name,
+        has_goto_link: !!allPrograms[0].goto_link,
+        goto_link_preview: allPrograms[0].goto_link ? allPrograms[0].goto_link.substring(0, 80) : 'ОТСУТСТВУЕТ'
+      }, null, 2));
+    }
 
     console.log('🎫 Загрузка купонов...');
     let allCoupons = [];
@@ -298,6 +311,7 @@ async function main() {
     const processedPrograms = [];
     let imagesFound = 0;
     let descriptionsGenerated = 0;
+    let gotoLinksFound = 0;
 
     console.log('🔄 Обработка программ...');
     for (const prog of allPrograms) {
@@ -326,28 +340,30 @@ async function main() {
       const programCoupons = allCoupons.filter(c => c.campaign?.id === prog.id);
       const category = detectCategory(prog);
       
-      // Извлечение изображений (оригинальные URL, все ключи)
       const images = extractImages(prog);
       if (images.image) imagesFound++;
 
       const descriptions = generateAdDescription(prog);
       if (descriptions.ad_text) descriptionsGenerated++;
 
+      // Используем goto_link, если есть, иначе site_url
+      const finalGotoLink = prog.goto_link || '';
+      if (finalGotoLink) gotoLinksFound++;
+
       processedPrograms.push({
         id: prog.id,
         name: prog.name,
         slug: slugify(prog.name),
         
-        // Оригинальные изображения во всех полях
         ...images,
         
-        // Описания
         site_description: descriptions.site_description,
         advertiser_description: descriptions.advertiser_description,
         description: descriptions.description,
         ad_text: descriptions.ad_text,
         
-        goto_link: prog.goto_link || prog.site_url || '',
+        // ✅ Партнёрская ссылка (goto_link) или прямая ссылка как fallback
+        goto_link: finalGotoLink,
         site_url: prog.site_url || '',
         
         category: category,
@@ -381,6 +397,7 @@ async function main() {
     console.log(`✅ Обработано: ${processedPrograms.length} программ`);
     console.log(`🖼️  Найдено изображений: ${imagesFound}/${processedPrograms.length}`);
     console.log(`📝 Сгенерировано описаний: ${descriptionsGenerated}/${processedPrograms.length}`);
+    console.log(`🔗 Получено goto_link: ${gotoLinksFound}/${processedPrograms.length}`);
 
     // Группировка по регионам
     const REGION_GROUPS = {
@@ -425,13 +442,14 @@ async function main() {
       console.log(`  ${group.name}: ${group.count} программ`);
     }
 
-    // Сохранение ТОЛЬКО admitad_ads.json
+    // Сохранение JSON
     const outputData = {
       last_updated: new Date().toISOString(),
       website_id: WEBSITE_ID || null,
       total_programs: processedPrograms.length,
       images_found: imagesFound,
       descriptions_generated: descriptionsGenerated,
+      goto_links_found: gotoLinksFound,
       programs: processedPrograms,
       region_groups: regionGroups,
       categories: Object.keys(CATEGORY_KEYWORDS)
@@ -448,7 +466,7 @@ async function main() {
     console.log('\n📋 Следующие шаги:');
     console.log('   1. Закоммитьте файл в GitHub:');
     console.log('      git add data/admitad_ads.json');
-    console.log('      git commit -m "Update Admitad data"');
+    console.log('      git commit -m "Update Admitad data with goto_link"');
     console.log('      git push');
     console.log('   2. Очистите кэш Worker:');
     console.log('      curl https://sochiautoparts.ru/api/cache/clear');
