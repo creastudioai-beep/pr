@@ -1,5 +1,6 @@
 // scripts/admitad-fetch.js
-// Исправленная версия: получаем goto_link через корректный эндпоинт deeplink
+// Использует эндпоинт Teleport для получения goto_link
+
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -15,7 +16,7 @@ const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID; // 2929853
 const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns coupons';
 const MAX_DESCRIPTION_LENGTH = 200;
 const MIN_DESCRIPTION_LENGTH = 30;
-const DEEPLINK_DELAY_MS = 150; // небольшая задержка между запросами
+const TELEPORT_DELAY_MS = 100;
 
 if (!BASE64_HEADER) {
   console.error('❌ Отсутствует BASE64_HEADER в переменных окружения');
@@ -26,7 +27,6 @@ if (!WEBSITE_ID) {
   process.exit(1);
 }
 
-// Декодируем Base64
 let clientId, clientSecret;
 try {
   const decoded = Buffer.from(BASE64_HEADER, 'base64').toString('utf8');
@@ -41,16 +41,16 @@ try {
 }
 
 // ============================================================
-// CATEGORY KEYWORDS & MAPPING (как в оригинале)
+// CATEGORY KEYWORDS & MAPPING
 // ============================================================
 const CATEGORY_KEYWORDS = {
   autoparts: ['автозапчасти', 'запчасти', 'auto parts', 'автодетали', 'spare parts', 'автомагазин'],
-  autoinsurance: ['страхование', 'осаго', 'каско', 'insurance', 'автострахование', 'страховка', 'полис'],
+  autoinsurance: ['страхование', 'осаго', 'каско', 'insurance', 'автострахование'],
   tires: ['шины', 'покрышки', 'tires', 'автошины', 'резина', 'диски', 'wheels'],
-  checkauto: ['проверка авто', 'автокод', 'vin', 'car check', 'история авто', 'проверка vin', 'отчет'],
-  autorent: ['прокат авто', 'аренда авто', 'car rental', 'rent a car', 'каршеринг', 'аренда машины'],
-  tools: ['инструменты', 'tools', 'автоинструмент', 'гараж', 'оборудование', 'диагностика'],
-  coupons: ['купон', 'coupon', 'промокод', 'скидка', 'discount', 'акция', 'распродажа'],
+  checkauto: ['проверка авто', 'автокод', 'vin', 'car check', 'история авто', 'отчет'],
+  autorent: ['прокат авто', 'аренда авто', 'car rental', 'rent a car', 'каршеринг'],
+  tools: ['инструменты', 'tools', 'автоинструмент', 'гараж', 'оборудование'],
+  coupons: ['купон', 'coupon', 'промокод', 'скидка', 'discount', 'акция'],
 };
 
 const CATEGORY_NAMES = {
@@ -65,44 +65,38 @@ const CATEGORY_NAMES = {
 };
 
 function detectCategory(program) {
-  const text = `${program.name} ${program.description || ''} ${program.site_description || ''}`.toLowerCase();
-  const priorityOrder = ['autoparts', 'autoinsurance', 'tires', 'checkauto', 'autorent', 'tools', 'coupons'];
-  for (const catId of priorityOrder) {
-    if (CATEGORY_KEYWORDS[catId].some(kw => text.includes(kw.toLowerCase()))) return catId;
+  const text = `${program.name} ${program.description || ''}`.toLowerCase();
+  for (const catId of Object.keys(CATEGORY_KEYWORDS)) {
+    if (CATEGORY_KEYWORDS[catId].some(kw => text.includes(kw))) return catId;
   }
   return 'other';
 }
 
 function extractImages(program) {
-  const imageKeys = ['image', 'image_url', 'logo', 'advertiser_logo', 'brand_logo', 'icon', 'favicon'];
-  let bestImage = null;
-  for (const key of imageKeys) {
-    const val = program[key];
-    if (val && typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://'))) {
-      if (!bestImage) bestImage = val;
-    }
-  }
-  const finalImage = bestImage || '';
+  const urls = ['image', 'image_url', 'logo', 'advertiser_logo', 'brand_logo', 'icon', 'favicon']
+    .map(k => program[k])
+    .find(v => v && (v.startsWith('http://') || v.startsWith('https://'))) || '';
   return {
-    image: finalImage,
-    image_url: finalImage,
-    logo: finalImage,
+    image: urls,
+    image_url: urls,
+    logo: urls,
     icon: program.icon || '',
     favicon: program.favicon || '',
-    advertiser_logo: finalImage,
-    brand_logo: finalImage
+    advertiser_logo: urls,
+    brand_logo: urls
   };
 }
 
 function cleanHTML(text) {
-  if (!text || typeof text !== 'string') return '';
-  return text.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  return text.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function generateAdDescription(program) {
-  const raw = [program.site_description, program.advertiser_description, program.description].filter(Boolean);
-  let best = raw.find(d => d.length >= MIN_DESCRIPTION_LENGTH) || '';
-  if (!best) best = `${program.name} — ${CATEGORY_NAMES[detectCategory(program)] || 'партнерская программа'}. Выгодные предложения, скидки и акции.`;
+  let best = [program.site_description, program.advertiser_description, program.description]
+    .filter(Boolean)
+    .find(d => d.length >= MIN_DESCRIPTION_LENGTH) || '';
+  if (!best) best = `${program.name} — ${CATEGORY_NAMES[detectCategory(program)] || 'партнерская программа'}.`;
   if (best.length > MAX_DESCRIPTION_LENGTH) best = best.substring(0, MAX_DESCRIPTION_LENGTH).replace(/\s+\S*$/, '...');
   return {
     site_description: cleanHTML(program.site_description || ''),
@@ -125,21 +119,21 @@ async function fetchAccessToken() {
   params.append('client_id', clientId);
   params.append('client_secret', clientSecret);
   params.append('scope', SCOPE);
-  const response = await fetch('https://api.admitad.com/token/', {
+  const res = await fetch('https://api.admitad.com/token/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'SochiAutoParts/1.0' },
     body: params.toString(),
   });
-  if (!response.ok) throw new Error(`Ошибка токена: ${response.status}`);
-  const data = await response.json();
+  if (!res.ok) throw new Error(`Ошибка токена: ${res.status}`);
+  const data = await res.json();
   console.log('✅ Токен получен');
   return data.access_token;
 }
 
-async function fetchAdvertiserInfo(advertiserId, accessToken) {
+async function fetchAdvertiserInfo(advertiserId, token) {
   try {
     const res = await fetch(`https://api.admitad.com/advertiser/${advertiserId}/info/`, {
-      headers: { 'Authorization': `Bearer ${accessToken}`, 'User-Agent': 'SochiAutoParts/1.0' },
+      headers: { 'Authorization': `Bearer ${token}`, 'User-Agent': 'SochiAutoParts/1.0' }
     });
     if (!res.ok) return null;
     const data = await res.json();
@@ -148,48 +142,32 @@ async function fetchAdvertiserInfo(advertiserId, accessToken) {
 }
 
 // ============================================================
-// ✅ ИСПРАВЛЕННАЯ ФУНКЦИЯ ПОЛУЧЕНИЯ GOTO_LINK
+// ✅ ПРАВИЛЬНЫЙ МЕТОД: Teleport API
 // ============================================================
-async function fetchGotoLink(websiteId, campaignId, accessToken) {
-  // Пробуем два варианта URL (документация иногда отличается)
-  const urls = [
-    `https://api.admitad.com/deeplink/${websiteId}/advcampaign/${campaignId}/`,
-    `https://api.admitad.com/deeplink/advcampaign/${campaignId}/?website=${websiteId}`
-  ];
-  for (const url of urls) {
-    try {
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'User-Agent': 'SochiAutoParts/1.0'
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        // Ответ может быть массивом объектов с полем link
-        if (Array.isArray(data) && data.length > 0 && data[0].link) {
-          return data[0].link;
-        }
-        // Или объектом с полем link
-        if (data.link) return data.link;
-        // Иногда поле называется goto_link или gotolink
-        if (data.goto_link) return data.goto_link;
-        if (data.gotolink) return data.gotolink;
-        // Логируем, чтобы понять структуру
-        console.warn(`⚠️ Неожиданный ответ для campaign ${campaignId}:`, JSON.stringify(data).substring(0, 200));
-        return '';
-      } else {
-        // Если 404, пробуем следующий URL
-        if (response.status === 404) continue;
-        console.warn(`⚠️ Ошибка ${response.status} для ${url}`);
-        return '';
+async function fetchTeleportLink(websiteId, campaignId, accessToken) {
+  const url = `https://api.admitad.com/teleport/advcampaign/${campaignId}/?website=${websiteId}`;
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'User-Agent': 'SochiAutoParts/1.0'
       }
-    } catch (err) {
-      console.warn(`⚠️ Ошибка запроса ${url}: ${err.message}`);
+    });
+    if (!response.ok) {
+      console.warn(`⚠️ Teleport вернул ${response.status} для кампании ${campaignId}`);
+      return '';
     }
+    const data = await response.json();
+    // Ответ содержит поле "link"
+    if (data && data.link) {
+      return data.link;
+    }
+    console.warn(`⚠️ Неожиданный ответ Teleport для ${campaignId}:`, JSON.stringify(data).substring(0, 200));
+    return '';
+  } catch (err) {
+    console.warn(`⚠️ Ошибка Teleport для ${campaignId}: ${err.message}`);
+    return '';
   }
-  console.warn(`❌ Не удалось получить goto_link для кампании ${campaignId} (оба варианта)`);
-  return '';
 }
 
 // ============================================================
@@ -199,8 +177,8 @@ async function main() {
   try {
     const accessToken = await fetchAccessToken();
 
-    // Загружаем список программ
-    let campaignsUrl = `https://api.admitad.com/advcampaigns/?limit=200&fields=id,name,site_url,description,commission,rating,epc,cookie_lifetime,image,logo,advertiser_name,regions&website=${WEBSITE_ID}`;
+    // Загрузка списка программ
+    const campaignsUrl = `https://api.admitad.com/advcampaigns/?limit=200&fields=id,name,site_url,description,commission,rating,epc,cookie_lifetime,image,logo,advertiser_name,regions&website=${WEBSITE_ID}`;
     console.log(`📡 Загрузка программ для площадки ${WEBSITE_ID}...`);
     const campaignsRes = await fetch(campaignsUrl, {
       headers: { 'Authorization': `Bearer ${accessToken}`, 'User-Agent': 'SochiAutoParts/1.0' }
@@ -210,7 +188,7 @@ async function main() {
     const allPrograms = campaignsData.results || [];
     console.log(`📊 Получено программ: ${allPrograms.length}`);
 
-    // Загружаем купоны
+    // Загрузка купонов
     console.log('🎫 Загрузка купонов...');
     let allCoupons = [];
     try {
@@ -228,7 +206,7 @@ async function main() {
     const processedPrograms = [];
     let imagesFound = 0, descriptionsGenerated = 0, gotoLinksFound = 0;
 
-    console.log('🔄 Обработка программ и получение goto_link...');
+    console.log('🔄 Обработка программ и получение goto_link через Teleport...');
     for (let i = 0; i < allPrograms.length; i++) {
       const prog = allPrograms[i];
       
@@ -241,7 +219,7 @@ async function main() {
       const cached = advertiserCache.get(prog.advertiser_id);
       if (cached) legalInfo.inn = cached.inn || '';
 
-      let allowedRegions = (prog.regions || []).map(r => r.region || r).filter(Boolean);
+      const allowedRegions = (prog.regions || []).map(r => r.region || r).filter(Boolean);
       const programCoupons = allCoupons.filter(c => c.campaign?.id === prog.id);
       const category = detectCategory(prog);
       const images = extractImages(prog);
@@ -249,12 +227,12 @@ async function main() {
       const descriptions = generateAdDescription(prog);
       if (descriptions.ad_text) descriptionsGenerated++;
 
-      // Получаем партнёрскую ссылку
-      console.log(`🔗 Запрос deeplink для ${prog.id} (${prog.name})...`);
-      const gotoLink = await fetchGotoLink(WEBSITE_ID, prog.id, accessToken);
-      if (gotoLink) {
+      // Получение партнёрской ссылки через Teleport
+      console.log(`🔗 Teleport для ${prog.id} (${prog.name})...`);
+      const teleportLink = await fetchTeleportLink(WEBSITE_ID, prog.id, accessToken);
+      if (teleportLink) {
         gotoLinksFound++;
-        console.log(`   ✅ Получена ссылка: ${gotoLink.substring(0, 80)}...`);
+        console.log(`   ✅ Ссылка: ${teleportLink.substring(0, 80)}...`);
       } else {
         console.log(`   ❌ Ссылка не получена`);
       }
@@ -265,7 +243,7 @@ async function main() {
         slug: slugify(prog.name),
         ...images,
         ...descriptions,
-        goto_link: gotoLink,
+        goto_link: teleportLink,
         site_url: prog.site_url || '',
         category,
         category_name: CATEGORY_NAMES[category] || 'Другое',
@@ -288,7 +266,7 @@ async function main() {
         }))
       });
 
-      await new Promise(resolve => setTimeout(resolve, DEEPLINK_DELAY_MS));
+      await new Promise(resolve => setTimeout(resolve, TELEPORT_DELAY_MS));
     }
 
     console.log(`✅ Обработано: ${processedPrograms.length} программ`);
@@ -322,7 +300,6 @@ async function main() {
       regionGroups[key].count = unique.length;
     }
 
-    // Сохраняем результат
     const outputData = {
       last_updated: new Date().toISOString(),
       website_id: WEBSITE_ID,
