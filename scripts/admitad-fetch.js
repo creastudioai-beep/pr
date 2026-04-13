@@ -1,6 +1,6 @@
 // scripts/admitad-fetch.js
 // ES module syntax - requires "type": "module" in package.json
-// ПАРСЕР ADMITAD: Сохраняет оригинальные URL, без проксирования и media_map
+// ПАРСЕР ADMITAD v2.0: Использует website-specific endpoint для получения gotolink
 
 import fs from 'fs/promises';
 import path from 'path';
@@ -19,8 +19,15 @@ const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns coupons';
 const MAX_DESCRIPTION_LENGTH = 200;
 const MIN_DESCRIPTION_LENGTH = 30;
 
+// Проверка обязательных переменных
 if (!BASE64_HEADER) {
   console.error('❌ Отсутствует BASE64_HEADER в переменных окружения');
+  process.exit(1);
+}
+
+if (!WEBSITE_ID) {
+  console.error('❌ Отсутствует ADMITAD_WEBSITE_ID в переменных окружения');
+  console.error('Без ID площадки парсер не сможет получить gotolink, и клики не будут засчитываться!');
   process.exit(1);
 }
 
@@ -35,6 +42,7 @@ try {
   clientId = parts[0];
   clientSecret = parts[1];
   console.log(`🔑 Client ID (первые 4): ${clientId.substring(0, 4)}...`);
+  console.log(`🌐 Website ID: ${WEBSITE_ID}`);
 } catch (error) {
   console.error('❌ Ошибка декодирования BASE64_HEADER:', error.message);
   process.exit(1);
@@ -85,18 +93,13 @@ function detectCategory(program) {
 }
 
 // ============================================================
-// IMAGE EXTRACTION - ORIGINAL URLS, ALL KEYS
+// IMAGE EXTRACTION
 // ============================================================
 
 function extractImages(program) {
   const imageKeys = [
-    'image',
-    'image_url',
-    'logo',
-    'advertiser_logo',
-    'brand_logo',
-    'icon',
-    'favicon'
+    'image', 'image_url', 'logo', 'advertiser_logo',
+    'brand_logo', 'icon', 'favicon'
   ];
   
   let bestImage = null;
@@ -107,12 +110,8 @@ function extractImages(program) {
     if (value && typeof value === 'string' && value.trim() !== '') {
       const url = value.trim();
       if (url.startsWith('http://') || url.startsWith('https://')) {
-        if (!bestImage) {
-          bestImage = url;
-        }
-        if (key === 'logo' || key === 'advertiser_logo') {
-          fallbackImage = url;
-        }
+        if (!bestImage) bestImage = url;
+        if (key === 'logo' || key === 'advertiser_logo') fallbackImage = url;
       }
     }
   }
@@ -253,13 +252,10 @@ async function main() {
   try {
     const accessToken = await fetchAccessToken();
     
-    let campaignsUrl = `https://api.admitad.com/advcampaigns/?limit=200`;
-    if (WEBSITE_ID) {
-      campaignsUrl += `&website=${WEBSITE_ID}`;
-      console.log(`📡 Загрузка программ для площадки ${WEBSITE_ID}...`);
-    } else {
-      console.log('📡 Загрузка всех доступных программ...');
-    }
+    // ✅ КРИТИЧНО: Используем website-specific endpoint для получения gotolink
+    const campaignsUrl = `https://api.admitad.com/advcampaigns/website/${WEBSITE_ID}/?limit=200`;
+    console.log(`📡 Загрузка программ для площадки ${WEBSITE_ID}...`);
+    console.log(`🔗 Endpoint: ${campaignsUrl}`);
     
     const campaignsResponse = await fetch(campaignsUrl, {
       headers: {
@@ -275,6 +271,20 @@ async function main() {
     const campaignsData = await campaignsResponse.json();
     const allPrograms = campaignsData.results || [];
     console.log(`📊 Получено программ: ${allPrograms.length}`);
+    
+    // Проверка наличия gotolink
+    let gotolinkCount = 0;
+    for (const prog of allPrograms) {
+      if (prog.gotolink) gotolinkCount++;
+    }
+    
+    if (gotolinkCount === 0) {
+      console.error('❌ В ответе API отсутствует поле gotolink!');
+      console.error('Убедитесь, что площадка подключена к программам и WEBSITE_ID корректен.');
+      process.exit(1);
+    }
+    
+    console.log(`✅ Программ с gotolink: ${gotolinkCount}/${allPrograms.length}`);
     
     // Загрузка купонов
     console.log('🎫 Загрузка купонов...');
@@ -302,6 +312,7 @@ async function main() {
     const processedPrograms = [];
     let imagesFound = 0;
     let descriptionsGenerated = 0;
+    let missingGotolink = [];
     
     console.log('🔄 Обработка программ...');
     for (const prog of allPrograms) {
@@ -343,6 +354,12 @@ async function main() {
       const descriptions = generateAdDescription(prog);
       if (descriptions.ad_text) descriptionsGenerated++;
       
+      // ✅ Проверка gotolink
+      const gotolink = prog.gotolink || '';
+      if (!gotolink) {
+        missingGotolink.push(prog.name);
+      }
+      
       processedPrograms.push({
         id: prog.id,
         name: prog.name,
@@ -352,6 +369,8 @@ async function main() {
         advertiser_description: descriptions.advertiser_description,
         description: descriptions.description,
         ad_text: descriptions.ad_text,
+        // ✅ КРИТИЧНО: Сохраняем gotolink
+        gotolink: gotolink,
         goto_link: prog.goto_link || prog.site_url || '',
         site_url: prog.site_url || '',
         category: category,
@@ -377,6 +396,15 @@ async function main() {
           goto_link: c.goto_link
         }))
       });
+    }
+    
+    // Предупреждения
+    if (missingGotolink.length > 0) {
+      console.warn(`⚠️ Программы без gotolink (${missingGotolink.length}):`);
+      missingGotolink.slice(0, 5).forEach(name => console.warn(`   - ${name}`));
+      if (missingGotolink.length > 5) {
+        console.warn(`   ... и ещё ${missingGotolink.length - 5}`);
+      }
     }
     
     console.log(`✅ Обработано: ${processedPrograms.length} программ`);
@@ -430,7 +458,7 @@ async function main() {
     // Сохранение
     const outputData = {
       last_updated: new Date().toISOString(),
-      website_id: WEBSITE_ID || null,
+      website_id: WEBSITE_ID,
       total_programs: processedPrograms.length,
       images_found: imagesFound,
       descriptions_generated: descriptionsGenerated,
@@ -449,10 +477,11 @@ async function main() {
     console.log('\n📋 Следующие шаги:');
     console.log('  1. Закоммитьте файл в GitHub:');
     console.log('     git add data/admitad_ads.json');
-    console.log('     git commit -m "Update Admitad data"');
+    console.log('     git commit -m "Update Admitad data with gotolink"');
     console.log('     git push');
     console.log('  2. Очистите кэш Worker:');
     console.log('     curl https://sochiautoparts.ru/api/cache/clear');
+    console.log('  3. Проверьте статистику в Admitad Dashboard');
     
   } catch (error) {
     console.error('❌ Ошибка:', error.message);
