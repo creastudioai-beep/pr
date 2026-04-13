@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-12T23:31:10.336Z",
+  "last_updated": "2026-04-13T02:24:11.328Z",
   "website_id": "2929853",
   "total_programs": 15,
   "images_found": 15,
@@ -30,7 +30,7 @@
       },
       "commission": null,
       "rating": "2.3",
-      "epc": 2465,
+      "epc": 2468,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -63,7 +63,7 @@
       },
       "commission": null,
       "rating": "2.1",
-      "epc": 233,
+      "epc": 232,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -2898,7 +2898,7 @@
           },
           "commission": null,
           "rating": "2.3",
-          "epc": 2465,
+          "epc": 2468,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -3767,7 +3767,7 @@
           },
           "commission": null,
           "rating": "2.1",
-          "epc": 233,
+          "epc": 232,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
