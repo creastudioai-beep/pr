@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-13T02:24:11.328Z",
+  "last_updated": "2026-04-13T05:38:02.022Z",
   "website_id": "2929853",
   "total_programs": 15,
   "images_found": 15,
@@ -374,7 +374,7 @@
         "inn": ""
       },
       "commission": null,
-      "rating": "2.3",
+      "rating": "2.2",
       "epc": 1,
       "products_count": 0,
       "cookie_lifetime": 30,
@@ -645,7 +645,7 @@
       },
       "commission": null,
       "rating": "2.1",
-      "epc": 225,
+      "epc": 226,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -678,7 +678,7 @@
       },
       "commission": null,
       "rating": "0.0",
-      "epc": 247,
+      "epc": 246,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -990,8 +990,8 @@
         "inn": ""
       },
       "commission": null,
-      "rating": "3.4",
-      "epc": 919,
+      "rating": "3.3",
+      "epc": 926,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -1090,7 +1090,7 @@
       },
       "commission": null,
       "rating": "3.5",
-      "epc": 787,
+      "epc": 788,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -1406,7 +1406,7 @@
       },
       "commission": null,
       "rating": "2.5",
-      "epc": 403,
+      "epc": 404,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -1439,7 +1439,7 @@
       },
       "commission": null,
       "rating": "0.0",
-      "epc": 112245,
+      "epc": 96491,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -1478,7 +1478,7 @@
           },
           "commission": null,
           "rating": "2.1",
-          "epc": 225,
+          "epc": 226,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -1511,7 +1511,7 @@
           },
           "commission": null,
           "rating": "0.0",
-          "epc": 247,
+          "epc": 246,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -1823,8 +1823,8 @@
             "inn": ""
           },
           "commission": null,
-          "rating": "3.4",
-          "epc": 919,
+          "rating": "3.3",
+          "epc": 926,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -1923,7 +1923,7 @@
           },
           "commission": null,
           "rating": "3.5",
-          "epc": 787,
+          "epc": 788,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -1989,7 +1989,7 @@
           },
           "commission": null,
           "rating": "2.5",
-          "epc": 403,
+          "epc": 404,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -2022,7 +2022,7 @@
           },
           "commission": null,
           "rating": "0.0",
-          "epc": 112245,
+          "epc": 96491,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -2340,7 +2340,7 @@
             "inn": ""
           },
           "commission": null,
-          "rating": "2.3",
+          "rating": "2.2",
           "epc": 1,
           "products_count": 0,
           "cookie_lifetime": 30,
@@ -2611,7 +2611,7 @@
           },
           "commission": null,
           "rating": "0.0",
-          "epc": 247,
+          "epc": 246,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -3209,7 +3209,7 @@
             "inn": ""
           },
           "commission": null,
-          "rating": "2.3",
+          "rating": "2.2",
           "epc": 1,
           "products_count": 0,
           "cookie_lifetime": 30,
@@ -3480,7 +3480,7 @@
           },
           "commission": null,
           "rating": "0.0",
-          "epc": 247,
+          "epc": 246,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
