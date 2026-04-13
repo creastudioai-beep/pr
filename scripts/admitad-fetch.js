@@ -1,8 +1,9 @@
 // scripts/admitad-fetch.js
-// Исправленная версия: получение goto_link через корректный эндпоинт deeplink_generator
+// Парсер Admitad с получением партнёрских ссылок через deeplink генератор (с параметром ulp)
+
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLTo path } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,11 +13,10 @@ const __dirname = path.dirname(__filename);
 // ============================================================
 const BASE64_HEADER = process.env.BASE64_HEADER;
 const WEBSITE_ID = process.env.ADMITAD_WEBSITE_ID; // 2929853
-// Добавляем необходимые scope для доступа к deeplink_generator
 const SCOPE = process.env.ADMITAD_SCOPE || 'advcampaigns coupons deeplink_generator';
 const MAX_DESCRIPTION_LENGTH = 200;
 const MIN_DESCRIPTION_LENGTH = 30;
-const API_DELAY_MS = 150; // Задержка между запросами к API
+const API_DELAY_MS = 150;
 
 if (!BASE64_HEADER) {
   console.error('❌ Отсутствует BASE64_HEADER в переменных окружения');
@@ -41,7 +41,7 @@ try {
 }
 
 // ============================================================
-// CATEGORY KEYWORDS & MAPPING (как в оригинале)
+// CATEGORY KEYWORDS & MAPPING
 // ============================================================
 const CATEGORY_KEYWORDS = {
   autoparts: ['автозапчасти', 'запчасти', 'auto parts', 'автодетали', 'spare parts', 'автомагазин'],
@@ -142,11 +142,15 @@ async function fetchAdvertiserInfo(advertiserId, token) {
 }
 
 // ============================================================
-// ✅ ИСПРАВЛЕННАЯ ФУНКЦИЯ: Deeplink Generator
+// ✅ ИСПРАВЛЕННАЯ ФУНКЦИЯ: Deeplink Generator с параметром ulp
 // ============================================================
-async function fetchGotoLink(websiteId, campaignId, accessToken) {
-  // Формируем URL для генератора deeplink согласно документации
-  const url = `https://api.admitad.com/deeplink/${websiteId}/advcampaign/${campaignId}/`;
+async function fetchGotoLink(websiteId, campaignId, accessToken, siteUrl = '') {
+  if (!siteUrl) {
+    console.warn(`⚠️ Нет site_url для кампании ${campaignId}, пропускаем`);
+    return '';
+  }
+  // Формируем URL с обязательным параметром ulp (закодированная целевая ссылка)
+  const url = `https://api.admitad.com/deeplink/${websiteId}/advcampaign/${campaignId}/?ulp=${encodeURIComponent(siteUrl)}`;
   try {
     const response = await fetch(url, {
       headers: {
@@ -159,7 +163,7 @@ async function fetchGotoLink(websiteId, campaignId, accessToken) {
       return '';
     }
     const data = await response.json();
-    // Ответ от API — это массив, содержащий объекты со сгенерированными ссылками
+    // Ответ — массив объектов с полем link
     if (Array.isArray(data) && data.length > 0 && data[0].link) {
       return data[0].link;
     }
@@ -189,7 +193,7 @@ async function main() {
     const allPrograms = campaignsData.results || [];
     console.log(`📊 Получено программ: ${allPrograms.length}`);
 
-    // Загрузка купонов (оставляем как есть)
+    // Загрузка купонов
     console.log('🎫 Загрузка купонов...');
     let allCoupons = [];
     try {
@@ -228,12 +232,12 @@ async function main() {
       const descriptions = generateAdDescription(prog);
       if (descriptions.ad_text) descriptionsGenerated++;
 
-      // Получение партнёрской ссылки через Deeplink Generator
+      // Получение партнёрской ссылки (передаём site_url)
       console.log(`🔗 Deeplink Generator для ${prog.id} (${prog.name})...`);
-      const gotoLink = await fetchGotoLink(WEBSITE_ID, prog.id, accessToken);
+      const gotoLink = await fetchGotoLink(WEBSITE_ID, prog.id, accessToken, prog.site_url);
       if (gotoLink) {
         gotoLinksFound++;
-        console.log(`   ✅ Ссылка получена: ${gotoLink.substring(0, 80)}...`);
+        console.log(`   ✅ Ссылка: ${gotoLink.substring(0, 80)}...`);
       } else {
         console.log(`   ❌ Ссылка не получена`);
       }
@@ -267,14 +271,13 @@ async function main() {
         }))
       });
 
-      // Небольшая задержка, чтобы не превысить лимиты API
       await new Promise(resolve => setTimeout(resolve, API_DELAY_MS));
     }
 
     console.log(`✅ Обработано: ${processedPrograms.length} программ`);
     console.log(`🔗 Получено goto_link: ${gotoLinksFound}/${processedPrograms.length}`);
 
-    // Группировка по регионам (как в оригинале)
+    // Группировка по регионам
     const REGION_GROUPS = {
       ru: { name: 'Россия', countries: ['RU'] },
       by: { name: 'Беларусь', countries: ['BY'] },
