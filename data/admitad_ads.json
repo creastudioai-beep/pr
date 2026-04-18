@@ -1,9 +1,9 @@
 {
-  "last_updated": "2026-04-18T02:02:21.891Z",
+  "last_updated": "2026-04-18T05:03:55.660Z",
   "website_id": "2929853",
-  "total_programs": 21,
-  "images_found": 21,
-  "descriptions_generated": 21,
+  "total_programs": 20,
+  "images_found": 20,
+  "descriptions_generated": 20,
   "goto_links_found": 20,
   "programs": [
     {
@@ -31,7 +31,7 @@
       },
       "commission": null,
       "rating": "2.9",
-      "epc": 2462,
+      "epc": 2495,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -64,7 +64,7 @@
       },
       "commission": null,
       "rating": "2.4",
-      "epc": 303,
+      "epc": 300,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -410,7 +410,7 @@
       },
       "commission": null,
       "rating": "0.0",
-      "epc": 242,
+      "epc": 240,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -699,39 +699,6 @@
       "coupons": []
     },
     {
-      "id": 40594,
-      "name": "Яндекс Аренда RU",
-      "slug": "яндекс-аренда-ru",
-      "image": "https://cdn.admitad-connect.com/campaign/images/2024/9/20/40594-86233c3dc6dbb45c.svg",
-      "image_url": "https://cdn.admitad-connect.com/campaign/images/2024/9/20/40594-86233c3dc6dbb45c.svg",
-      "logo": "https://cdn.admitad-connect.com/campaign/images/2024/9/20/40594-86233c3dc6dbb45c.svg",
-      "icon": "",
-      "favicon": "",
-      "advertiser_logo": "https://cdn.admitad-connect.com/campaign/images/2024/9/20/40594-86233c3dc6dbb45c.svg",
-      "brand_logo": "https://cdn.admitad-connect.com/campaign/images/2024/9/20/40594-86233c3dc6dbb45c.svg",
-      "site_description": "",
-      "advertiser_description": "",
-      "description": "Информация о компании: Яндекс Аренда — сервис долгосрочной аренды квартир. Портрет целевой аудитории: Возраст: 25-45. Пол: 50% женщины / 50% мужчины. Доход: выше среднего, высокий, премиум. Преимущества для веб-мастеров: Надежный рекламодатель; Уникальный сервис аренды квартир; Высокие ставки по целевым действиям. Преимущества для клиентов: Яндекс Аренда возьмёт на себя заботы по сдаче квартиры; Съемка квартиры и 3D-тур, подбор и проверка жильцов, всё это на стороне сервиса; Специалисты сервиса помогут сдать квартиру выгодно, а ещё подскажут, когда поднять арендную плату; Деньги за аренду придут день в день благодаря финзащите от сервиса; Если жильцы неожиданно съедут или что-то сломают, сервис компенсирует простой и убытки; Поддержка сервиса будет на связи на протяжении всего периода сдачи квартиры. Промокоды: Отсутствуют. Сверка заказов: Проводится вручную один раз в месяц. Модерация вебмастеров: Проводится три раза в неделю. Отклонение заказов / отключение партнёра за: контекстную рекламу на бренд, использование запрещённых видов трафика. КОД ККТУ: 13.1.2",
-      "ad_text": "  \r\n\r\nИнформация о компании:\r\nЯндекс Аренда — сервис долгосрочной аренды квартир.\r\n\r\nПортрет целевой аудитории: \r\n\r\n\r\n\tВозраст: 25-45.\r\n\tПол: 50% женщины / 50% мужчины.\r\n\tДоход: выше среднего,...",
-      "goto_link": "",
-      "site_url": "https://arenda.yandex.ru/",
-      "category": "coupons",
-      "category_name": "Купоны и скидки",
-      "advertiser_legal_info": {
-        "name": "Яндекс Аренда RU",
-        "inn": ""
-      },
-      "commission": null,
-      "rating": "3.5",
-      "epc": 624,
-      "products_count": 0,
-      "cookie_lifetime": 30,
-      "allowed_regions": [
-        "RU"
-      ],
-      "coupons": []
-    },
-    {
       "id": 29488,
       "name": "Xistore  BY",
       "slug": "xistore-by",
@@ -788,7 +755,7 @@
         "inn": ""
       },
       "commission": null,
-      "rating": "2.9",
+      "rating": "2.8",
       "epc": 2,
       "products_count": 0,
       "cookie_lifetime": 30,
@@ -1067,7 +1034,7 @@
         "inn": ""
       },
       "commission": null,
-      "rating": "2.5",
+      "rating": "2.4",
       "epc": 1,
       "products_count": 0,
       "cookie_lifetime": 30,
@@ -1338,7 +1305,7 @@
       },
       "commission": null,
       "rating": "2.5",
-      "epc": 229,
+      "epc": 226,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -1371,7 +1338,7 @@
       },
       "commission": null,
       "rating": "3.2",
-      "epc": 835,
+      "epc": 834,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -1403,8 +1370,8 @@
         "inn": ""
       },
       "commission": null,
-      "rating": "3.9",
-      "epc": 946,
+      "rating": "3.8",
+      "epc": 950,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -1437,7 +1404,7 @@
       },
       "commission": null,
       "rating": "2.6",
-      "epc": 523,
+      "epc": 524,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -1470,7 +1437,7 @@
       },
       "commission": null,
       "rating": "1.9",
-      "epc": 327,
+      "epc": 328,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -1503,7 +1470,7 @@
       },
       "commission": null,
       "rating": "4.0",
-      "epc": 789,
+      "epc": 790,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -1815,8 +1782,8 @@
         "inn": ""
       },
       "commission": null,
-      "rating": "2.4",
-      "epc": 188,
+      "rating": "2.5",
+      "epc": 189,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -2099,7 +2066,7 @@
       },
       "commission": null,
       "rating": "2.9",
-      "epc": 408,
+      "epc": 410,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -2132,7 +2099,7 @@
       },
       "commission": null,
       "rating": "0.0",
-      "epc": 69923,
+      "epc": 41588,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -2204,7 +2171,7 @@
           },
           "commission": null,
           "rating": "0.0",
-          "epc": 242,
+          "epc": 240,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -2460,39 +2427,6 @@
           "coupons": []
         },
         {
-          "id": 40594,
-          "name": "Яндекс Аренда RU",
-          "slug": "яндекс-аренда-ru",
-          "image": "https://cdn.admitad-connect.com/campaign/images/2024/9/20/40594-86233c3dc6dbb45c.svg",
-          "image_url": "https://cdn.admitad-connect.com/campaign/images/2024/9/20/40594-86233c3dc6dbb45c.svg",
-          "logo": "https://cdn.admitad-connect.com/campaign/images/2024/9/20/40594-86233c3dc6dbb45c.svg",
-          "icon": "",
-          "favicon": "",
-          "advertiser_logo": "https://cdn.admitad-connect.com/campaign/images/2024/9/20/40594-86233c3dc6dbb45c.svg",
-          "brand_logo": "https://cdn.admitad-connect.com/campaign/images/2024/9/20/40594-86233c3dc6dbb45c.svg",
-          "site_description": "",
-          "advertiser_description": "",
-          "description": "Информация о компании: Яндекс Аренда — сервис долгосрочной аренды квартир. Портрет целевой аудитории: Возраст: 25-45. Пол: 50% женщины / 50% мужчины. Доход: выше среднего, высокий, премиум. Преимущества для веб-мастеров: Надежный рекламодатель; Уникальный сервис аренды квартир; Высокие ставки по целевым действиям. Преимущества для клиентов: Яндекс Аренда возьмёт на себя заботы по сдаче квартиры; Съемка квартиры и 3D-тур, подбор и проверка жильцов, всё это на стороне сервиса; Специалисты сервиса помогут сдать квартиру выгодно, а ещё подскажут, когда поднять арендную плату; Деньги за аренду придут день в день благодаря финзащите от сервиса; Если жильцы неожиданно съедут или что-то сломают, сервис компенсирует простой и убытки; Поддержка сервиса будет на связи на протяжении всего периода сдачи квартиры. Промокоды: Отсутствуют. Сверка заказов: Проводится вручную один раз в месяц. Модерация вебмастеров: Проводится три раза в неделю. Отклонение заказов / отключение партнёра за: контекстную рекламу на бренд, использование запрещённых видов трафика. КОД ККТУ: 13.1.2",
-          "ad_text": "  \r\n\r\nИнформация о компании:\r\nЯндекс Аренда — сервис долгосрочной аренды квартир.\r\n\r\nПортрет целевой аудитории: \r\n\r\n\r\n\tВозраст: 25-45.\r\n\tПол: 50% женщины / 50% мужчины.\r\n\tДоход: выше среднего,...",
-          "goto_link": "",
-          "site_url": "https://arenda.yandex.ru/",
-          "category": "coupons",
-          "category_name": "Купоны и скидки",
-          "advertiser_legal_info": {
-            "name": "Яндекс Аренда RU",
-            "inn": ""
-          },
-          "commission": null,
-          "rating": "3.5",
-          "epc": 624,
-          "products_count": 0,
-          "cookie_lifetime": 30,
-          "allowed_regions": [
-            "RU"
-          ],
-          "coupons": []
-        },
-        {
           "id": 26101,
           "name": "Globaldrive [CPS] RU",
           "slug": "globaldrive-cps-ru",
@@ -2517,7 +2451,7 @@
           },
           "commission": null,
           "rating": "2.5",
-          "epc": 229,
+          "epc": 226,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -2550,7 +2484,7 @@
           },
           "commission": null,
           "rating": "3.2",
-          "epc": 835,
+          "epc": 834,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -2582,8 +2516,8 @@
             "inn": ""
           },
           "commission": null,
-          "rating": "3.9",
-          "epc": 946,
+          "rating": "3.8",
+          "epc": 950,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -2616,7 +2550,7 @@
           },
           "commission": null,
           "rating": "2.6",
-          "epc": 523,
+          "epc": 524,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -2649,7 +2583,7 @@
           },
           "commission": null,
           "rating": "1.9",
-          "epc": 327,
+          "epc": 328,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -2682,7 +2616,7 @@
           },
           "commission": null,
           "rating": "4.0",
-          "epc": 789,
+          "epc": 790,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -2994,8 +2928,8 @@
             "inn": ""
           },
           "commission": null,
-          "rating": "2.4",
-          "epc": 188,
+          "rating": "2.5",
+          "epc": 189,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -3028,7 +2962,7 @@
           },
           "commission": null,
           "rating": "2.9",
-          "epc": 408,
+          "epc": 410,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -3061,7 +2995,7 @@
           },
           "commission": null,
           "rating": "0.0",
-          "epc": 69923,
+          "epc": 41588,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -3070,7 +3004,7 @@
           "coupons": []
         }
       ],
-      "count": 13
+      "count": 12
     },
     "by": {
       "id": "by",
@@ -3381,7 +3315,7 @@
           },
           "commission": null,
           "rating": "0.0",
-          "epc": 242,
+          "epc": 240,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -3693,7 +3627,7 @@
             "inn": ""
           },
           "commission": null,
-          "rating": "2.9",
+          "rating": "2.8",
           "epc": 2,
           "products_count": 0,
           "cookie_lifetime": 30,
@@ -3972,7 +3906,7 @@
             "inn": ""
           },
           "commission": null,
-          "rating": "2.5",
+          "rating": "2.4",
           "epc": 1,
           "products_count": 0,
           "cookie_lifetime": 30,
@@ -4530,7 +4464,7 @@
           },
           "commission": null,
           "rating": "2.9",
-          "epc": 2462,
+          "epc": 2495,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -4843,7 +4777,7 @@
           },
           "commission": null,
           "rating": "0.0",
-          "epc": 242,
+          "epc": 240,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -5122,7 +5056,7 @@
             "inn": ""
           },
           "commission": null,
-          "rating": "2.9",
+          "rating": "2.8",
           "epc": 2,
           "products_count": 0,
           "cookie_lifetime": 30,
@@ -5401,7 +5335,7 @@
             "inn": ""
           },
           "commission": null,
-          "rating": "2.5",
+          "rating": "2.4",
           "epc": 1,
           "products_count": 0,
           "cookie_lifetime": 30,
@@ -5959,7 +5893,7 @@
           },
           "commission": null,
           "rating": "2.4",
-          "epc": 303,
+          "epc": 300,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
