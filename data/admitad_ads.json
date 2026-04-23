@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-04-22T23:42:33.912Z",
+  "last_updated": "2026-04-23T02:13:59.165Z",
   "website_id": "2929853",
   "total_programs": 23,
   "images_found": 23,
@@ -31,7 +31,7 @@
       },
       "commission": null,
       "rating": "2.9",
-      "epc": 2496,
+      "epc": 2493,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -64,7 +64,7 @@
       },
       "commission": null,
       "rating": "2.4",
-      "epc": 294,
+      "epc": 292,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -1404,7 +1404,7 @@
       },
       "commission": null,
       "rating": "4.5",
-      "epc": 435,
+      "epc": 438,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -1816,7 +1816,7 @@
       },
       "commission": null,
       "rating": "2.5",
-      "epc": 191,
+      "epc": 192,
       "products_count": 0,
       "cookie_lifetime": 30,
       "allowed_regions": [
@@ -2659,7 +2659,7 @@
           },
           "commission": null,
           "rating": "4.5",
-          "epc": 435,
+          "epc": 438,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -3071,7 +3071,7 @@
           },
           "commission": null,
           "rating": "2.5",
-          "epc": 191,
+          "epc": 192,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -4725,7 +4725,7 @@
           },
           "commission": null,
           "rating": "2.9",
-          "epc": 2496,
+          "epc": 2493,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
@@ -6197,7 +6197,7 @@
           },
           "commission": null,
           "rating": "2.4",
-          "epc": 294,
+          "epc": 292,
           "products_count": 0,
           "cookie_lifetime": 30,
           "allowed_regions": [
