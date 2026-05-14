@@ -1,10 +1,10 @@
 {
-  "last_updated": "2026-05-14T06:22:10.020Z",
+  "last_updated": "2026-05-14T09:31:36.615Z",
   "website_id": "2929853",
-  "total_programs": 25,
-  "images_found": 25,
-  "descriptions_generated": 25,
-  "goto_links_found": 25,
+  "total_programs": 24,
+  "images_found": 24,
+  "descriptions_generated": 24,
+  "goto_links_found": 24,
   "programs": [
     {
       "id": 38740,
@@ -36,39 +36,6 @@
       "cookie_lifetime": 30,
       "allowed_regions": [
         "KZ"
-      ],
-      "coupons": []
-    },
-    {
-      "id": 144297,
-      "name": "America-carrental MX",
-      "slug": "america-carrental-mx",
-      "image": "https://cdn.admitad-connect.com/campaign/images/2025/11/27/144297-74d1295df02ccf85.svg",
-      "image_url": "https://cdn.admitad-connect.com/campaign/images/2025/11/27/144297-74d1295df02ccf85.svg",
-      "logo": "https://cdn.admitad-connect.com/campaign/images/2025/11/27/144297-74d1295df02ccf85.svg",
-      "icon": "",
-      "favicon": "",
-      "advertiser_logo": "https://cdn.admitad-connect.com/campaign/images/2025/11/27/144297-74d1295df02ccf85.svg",
-      "brand_logo": "https://cdn.admitad-connect.com/campaign/images/2025/11/27/144297-74d1295df02ccf85.svg",
-      "site_description": "",
-      "advertiser_description": "",
-      "description": "America Car Rental ofrece servicios de arrendamiento de autos en México, desde vehículos económicos hasta SUVs y autos ejecutivos, con enfoque en comodidad, rapidez y confiabilidad. El objetivo de la campaña es incrementar reservas online, generando clientes nuevos y recurrentes mediante estrategias de marketing digital orientadas a performance. El público objetivo son adultos de 25 a 55 años que buscan rentar vehículos para viajes de negocio o placer y que valoran eficiencia y facilidad en la renta de autos. Los KPIs principales son número de reservas online, costo por reserva (CPA) y CTR y conversiones de campañas digitales. La campaña se ejecuta únicamente en web, utilizando banners y materiales de display orientados a performance, con seguimiento de resultados a través de Admitad (clicks, impresiones, ventas). No se requiere app ni integración SDK, y todos los enlaces y creatividades deben cumplir con los lineamientos de la marca. Se monitorea constantemente para optimizar performance y asegurar cumplimiento de KPIs.",
-      "ad_text": "America Car Rental ofrece servicios de arrendamiento de autos en México, desde vehículos económicos hasta SUVs y autos ejecutivos, con enfoque en comodidad, rapidez y confiabilidad. El objetivo de la...",
-      "goto_link": "https://hvjjg.com/g/eg1kxgbhtv3c08bd9d2ce34446fd0a/?ulp=https%3A%2F%2Fwww.america-carrental.com",
-      "site_url": "https://www.america-carrental.com",
-      "category": "autorent",
-      "category_name": "Прокат авто",
-      "advertiser_legal_info": {
-        "name": "America-carrental MX",
-        "inn": ""
-      },
-      "commission": null,
-      "rating": "2.3",
-      "epc": 325,
-      "products_count": 0,
-      "cookie_lifetime": 30,
-      "allowed_regions": [
-        "MX"
       ],
       "coupons": []
     },
@@ -6411,39 +6378,6 @@
       "name": "Глобал",
       "programs": [
         {
-          "id": 144297,
-          "name": "America-carrental MX",
-          "slug": "america-carrental-mx",
-          "image": "https://cdn.admitad-connect.com/campaign/images/2025/11/27/144297-74d1295df02ccf85.svg",
-          "image_url": "https://cdn.admitad-connect.com/campaign/images/2025/11/27/144297-74d1295df02ccf85.svg",
-          "logo": "https://cdn.admitad-connect.com/campaign/images/2025/11/27/144297-74d1295df02ccf85.svg",
-          "icon": "",
-          "favicon": "",
-          "advertiser_logo": "https://cdn.admitad-connect.com/campaign/images/2025/11/27/144297-74d1295df02ccf85.svg",
-          "brand_logo": "https://cdn.admitad-connect.com/campaign/images/2025/11/27/144297-74d1295df02ccf85.svg",
-          "site_description": "",
-          "advertiser_description": "",
-          "description": "America Car Rental ofrece servicios de arrendamiento de autos en México, desde vehículos económicos hasta SUVs y autos ejecutivos, con enfoque en comodidad, rapidez y confiabilidad. El objetivo de la campaña es incrementar reservas online, generando clientes nuevos y recurrentes mediante estrategias de marketing digital orientadas a performance. El público objetivo son adultos de 25 a 55 años que buscan rentar vehículos para viajes de negocio o placer y que valoran eficiencia y facilidad en la renta de autos. Los KPIs principales son número de reservas online, costo por reserva (CPA) y CTR y conversiones de campañas digitales. La campaña se ejecuta únicamente en web, utilizando banners y materiales de display orientados a performance, con seguimiento de resultados a través de Admitad (clicks, impresiones, ventas). No se requiere app ni integración SDK, y todos los enlaces y creatividades deben cumplir con los lineamientos de la marca. Se monitorea constantemente para optimizar performance y asegurar cumplimiento de KPIs.",
-          "ad_text": "America Car Rental ofrece servicios de arrendamiento de autos en México, desde vehículos económicos hasta SUVs y autos ejecutivos, con enfoque en comodidad, rapidez y confiabilidad. El objetivo de la...",
-          "goto_link": "https://hvjjg.com/g/eg1kxgbhtv3c08bd9d2ce34446fd0a/?ulp=https%3A%2F%2Fwww.america-carrental.com",
-          "site_url": "https://www.america-carrental.com",
-          "category": "autorent",
-          "category_name": "Прокат авто",
-          "advertiser_legal_info": {
-            "name": "America-carrental MX",
-            "inn": ""
-          },
-          "commission": null,
-          "rating": "2.3",
-          "epc": 325,
-          "products_count": 0,
-          "cookie_lifetime": 30,
-          "allowed_regions": [
-            "MX"
-          ],
-          "coupons": []
-        },
-        {
           "id": 15387,
           "name": "Localrent",
           "slug": "localrent",
@@ -6727,7 +6661,7 @@
           "coupons": []
         }
       ],
-      "count": 3
+      "count": 2
     }
   },
   "categories": [
